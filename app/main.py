@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from app.models import compute_embedding
+from pydantic import BaseModel
+from app.models import compute_embedding, compute_text_embedding
 import logging
 
 # 配置日志
@@ -8,8 +9,31 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="CLIP Image Embedding Service")
 
+class TextEmbeddingRequest(BaseModel):
+    text: str
+
+@app.post("/text-embedding", response_model=dict)
+async def create_text_embedding(request: TextEmbeddingRequest):
+    """
+    接收文本，返回 embedding 向量
+    """
+    try:
+        if not request.text.strip():
+            raise HTTPException(status_code=400, detail="Empty text")
+
+        # 计算 text embedding
+        embedding = compute_text_embedding(request.text)
+
+        return {"embedding": embedding}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to process text")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/embedding", response_model=dict)
-async def create_embedding(file: UploadFile = File(...)):
+async def create_file_embedding(file: UploadFile = File(...)):
     """
     接收上传的图片文件，返回 embedding 向量
     """
