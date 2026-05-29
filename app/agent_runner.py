@@ -67,7 +67,7 @@ async def chat(payload: Dict[str, Any]):
     k = int(payload.get("k", 5))
     if not q:
         raise HTTPException(status_code=400, detail="missing query")
-    res = _VECTORSTORE.query(query_text=q, n_results=k)
+    res = _VECTORSTORE.query(query_text=q, n_results=k, embedding_fn=lambda texts: _EMBEDDINGS.embed_documents(texts))
     docs = []
     if res:
         docs = [{"id": id_, "document": doc, "metadata": md} for id_, doc, md in
