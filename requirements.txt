@@ -4,3 +4,15 @@ torch==2.6.0
 transformers==4.35.0
 Pillow==10.1.0
 python-multipart==0.0.6   # 用于处理文件上传
+
+# LangChain + Vector DB
+langchain>=0.0.300
+sentence-transformers>=2.2.2
+
+# typing helpers
+typing-extensions>=4.5.0
+
+# Weaviate client support and optional dotenv for config
+weaviate-client>=3.0.0
+python-dotenv>=1.0.0
+requests>=2.30.0

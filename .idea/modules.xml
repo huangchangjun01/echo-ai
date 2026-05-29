@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/echo-start.iml" filepath="$PROJECT_DIR$/.idea/echo-start.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/echo-ai.iml" filepath="$PROJECT_DIR$/.idea/echo-ai.iml" />
     </modules>
   </component>
 </project>
