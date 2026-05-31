@@ -8,13 +8,19 @@ from config.config import WEAVIATE_URL, WEAVIATE_CLASS
 
 try:
     import weaviate
-    from weaviate.collections.classes.config import Property, DataType
 except Exception:
     weaviate = None
-    Property = None
-    DataType = None
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_url(url: str) -> tuple:
+    """Parse WEAVIATE_URL into host and port."""
+    parsed = urlparse(url)
+    host = parsed.hostname or 'localhost'
+    port = parsed.port or 8080
+    secure = parsed.scheme == 'https'
+    return host, port, secure
 
 
 class WeaviateVectorStore:
@@ -27,44 +33,38 @@ class WeaviateVectorStore:
     def __init__(self):
         if weaviate is None:
             raise RuntimeError(
-                "weaviate-client v4 is not installed. Please install 'weaviate-client>=4.0.0' to use WeaviateVectorStore")
+                "weaviate-client is not installed. Please install 'weaviate-client>=3.26.7' to use WeaviateVectorStore")
 
         self.class_name = WEAVIATE_CLASS
         logger.info(f"[__init__] Initializing WeaviateVectorStore for class: {self.class_name}")
 
-        parsed = urlparse(WEAVIATE_URL)
-        self._client = weaviate.connect_to_custom(
-            http_host=parsed.hostname or "localhost",
-            http_port=parsed.port or 8080,
-            http_secure=parsed.scheme == "https",
-            grpc_host=parsed.hostname or "localhost",
-            grpc_port=50051,
-            grpc_secure=False,
-            skip_init_checks=True,
-        )
-        logger.info(f"[__init__] Connected to Weaviate at {WEAVIATE_URL}")
+        host, port, secure = _parse_url(WEAVIATE_URL)
+        url = f"{'https' if secure else 'http'}://{host}:{port}"
+        self._client = weaviate.Client(url=url)
+        logger.info(f"[__init__] Connected to Weaviate at {url}")
         self._ensure_collection()
 
     def _ensure_collection(self):
-        if not self._client.collections.exists(self.class_name):
-            self._client.collections.create(
-                name=self.class_name,
+        try:
+            schema = self._client.schema.get()
+            classes = [c.get('class') for c in schema.get('classes', [])]
+            if self.class_name not in classes:
+                raise ValueError(f"Collection {self.class_name} does not exist")
+            logger.info(f"[_ensure_collection] Collection {self.class_name} already exists")
+        except Exception:
+            self._client.schema.create_class(
+                class_name=self.class_name,
                 properties=[
-                    Property(name="text", data_type=DataType.TEXT),
-                    Property(name="metadata", data_type=DataType.TEXT),
-                    Property(name="fileId", data_type=DataType.TEXT),
-                    Property(name="fileName", data_type=DataType.TEXT),
+                    {"name": "text", "dataType": ["text"]},
+                    {"name": "metadata", "dataType": ["text"]},
+                    {"name": "fileId", "dataType": ["text"]},
+                    {"name": "fileName", "dataType": ["text"]},
                 ],
                 vectorizer_config=None,
             )
             logger.info(f"[_ensure_collection] Created collection: {self.class_name}")
-        else:
-            logger.info(f"[_ensure_collection] Collection {self.class_name} already exists")
 
-    def _get_collection(self):
-        return self._client.collections.get(self.class_name)
-
-    def _insert_one(self, coll, id_: str, text: str, md: Optional[Dict], vector):
+    def _insert_one(self, id_: str, text: str, md: Optional[Dict], vector):
         """Insert a single document, returning UUID."""
         file_id = md.get("fileId") if isinstance(md, dict) else None
         file_name = md.get("fileName") if isinstance(md, dict) else None
@@ -73,9 +73,14 @@ class WeaviateVectorStore:
         except Exception:
             id_uuid = uuid.uuid4()
             logger.warning(f"[add_texts] Invalid id '{id_}', generated UUID: {id_uuid}")
-        coll.data.insert(
-            properties={"text": text, "metadata": json.dumps(md) if md else "", "fileId": file_id,
-                        "fileName": file_name},
+        self._client.data_object.create(
+            class_name=self.class_name,
+            data_object={
+                "text": text,
+                "metadata": json.dumps(md) if md else "",
+                "fileId": file_id,
+                "fileName": file_name,
+            },
             uuid=str(id_uuid),
             vector=vector,
         )
@@ -86,13 +91,12 @@ class WeaviateVectorStore:
         if embeddings is None:
             raise SyntaxError('Embeddings is null')
         metadatas = metadatas or [None] * len(texts)
-        coll = self._get_collection()
         for id_, text, md, vector in zip(ids, texts, metadatas, embeddings):
             if vector is None:
                 logger.error(f"[add_texts] Missing embedding for id={id_}")
                 raise ValueError("WeaviateVectorStore requires embeddings.")
             try:
-                self._insert_one(coll, id_, text, md, vector)
+                self._insert_one(id_, text, md, vector)
                 logger.info(f"[add_texts] Inserted id={id_}")
             except Exception as e:
                 logger.error(f"[add_texts] Failed to insert id={id_}: {e}")
@@ -107,24 +111,22 @@ class WeaviateVectorStore:
             logger.error(f"[query] Failed to compute query embedding: {e}")
             raise ValueError("embedding_fn call failed.") from e
 
-        coll = self._get_collection()
-        result = coll.query.near_vector(
-            near_vector=q_emb,
-            limit=n_results,
-            return_properties=["text", "metadata", "fileId", "fileName"],
-        )
+        result = self._client.query.get(
+            self.class_name,
+            ['text', 'metadata', 'fileId', 'fileName']
+        ).with_near_vector({'vector': q_emb}).with_limit(n_results).do()
 
         ids, docs, mds = [], [], []
-        for obj in result.objects:
-            ids.append(str(obj.uuid))
-            props = obj.properties
-            docs.append(props.get("text"))
+        items = result.get('data', {}).get('Get', {}).get(self.class_name, [])
+        for item in items:
+            ids.append(str(uuid.uuid4()))
+            docs.append(item.get('text'))
             try:
-                meta = json.loads(props.get("metadata") or "{}")
+                meta = json.loads(item.get('metadata') or "{}")
             except Exception:
                 meta = {}
             for key in ("fileId", "fileName"):
-                val = props.get(key)
+                val = item.get(key)
                 if val:
                     meta.setdefault(key, val)
             mds.append(meta)
@@ -134,21 +136,23 @@ class WeaviateVectorStore:
 
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
         try:
-            coll = self._get_collection()
-            obj = coll.data.get_by_id(uuid=doc_id)
-            return obj.properties if obj else None
+            obj = self._client.data_object.get_by_id(uuid=doc_id, class_name=self.class_name)
+            return obj.get('properties') if obj else None
         except Exception as e:
             logger.error(f"[get_document] Failed for id={doc_id}: {e}")
             return None
 
     def delete(self, ids: List[str]):
-        coll = self._get_collection()
         for id_ in ids:
             try:
-                coll.data.delete_by_id(uuid=id_)
+                self._client.data_object.delete(uuid=id_, class_name=self.class_name)
                 logger.info(f"[delete] Deleted id={id_}")
             except Exception as e:
                 logger.error(f"[delete] Failed to delete id={id_}: {e}")
+
+    def close(self):
+        # v3 client doesn't need explicit close
+        logger.info("[close] Weaviate client (v3, no explicit close needed)")
 
 
 def get_vector_store():

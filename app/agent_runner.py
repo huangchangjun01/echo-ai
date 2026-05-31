@@ -25,6 +25,8 @@ async def lifespan(app: FastAPI):
     if _VECTORSTORE is None:
         _VECTORSTORE = get_vector_store()
     yield
+    if _VECTORSTORE is not None:
+        _VECTORSTORE.close()
 
 
 app = FastAPI(title="Echo-AI LangChain Agent", lifespan=lifespan)

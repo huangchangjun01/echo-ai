@@ -6,7 +6,17 @@
       "Bash(taskkill /F /PID 28504)",
       "Bash(taskkill *)",
       "Bash(curl -s http://localhost:8000/health)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(pkill -f \"python run.py\")",
+      "Bash(pip show *)",
+      "Bash(netsh advfirewall *)",
+      "Bash(pip index *)",
+      "Bash(pip install *)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(jobs -l)",
+      "Bash(awk '{print $2}')",
+      "Bash(TaskStop *)",
+      "Bash(pkill -f \"python -c\")"
     ]
   }
 }
