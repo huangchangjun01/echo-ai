@@ -4,7 +4,7 @@ import logging
 import uuid
 from urllib.parse import urlparse
 
-from config.config import WEAVIATE_URL, WEAVIATE_CLASS
+from config.config import WEAVIATE_URL, WEAVIATE_CLASS, VECTOR_SIMILARITY_THRESHOLD
 
 try:
     import weaviate
@@ -111,27 +111,50 @@ class WeaviateVectorStore:
             logger.error(f"[query] Failed to compute query embedding: {e}")
             raise ValueError("embedding_fn call failed.") from e
 
+        # Fetch more results to account for filtering by similarity threshold
+        fetch_limit = max(n_results * 10, 20)
         result = self._client.query.get(
             self.class_name,
             ['text', 'metadata', 'fileId', 'fileName']
-        ).with_near_vector({'vector': q_emb}).with_limit(n_results).do()
+        ).with_near_vector({'vector': q_emb}).with_additional(['distance']).with_limit(fetch_limit).do()
 
-        ids, docs, mds = [], [], []
         items = result.get('data', {}).get('Get', {}).get(self.class_name, [])
+
+        # Filter by similarity threshold using distance (1 - distance = cosine similarity)
+        scored_items = []
         for item in items:
+            distance = item.get('_additional', {}).get('distance')
+            if distance is None:
+                logger.warning(f"[query] No distance returned for item, skipping")
+                continue
+
+            # Cosine similarity = 1 - cosine distance
+            similarity = 1.0 - distance
+            if similarity >= VECTOR_SIMILARITY_THRESHOLD:
+                scored_items.append((similarity, item))
+
+        # Sort by similarity descending
+        scored_items.sort(key=lambda x: x[0], reverse=True)
+
+        # Return only the top result (most similar)
+        ids, docs, mds = [], [], []
+        if scored_items:
+            top_similarity, top_item = scored_items[0]
             ids.append(str(uuid.uuid4()))
-            docs.append(item.get('text'))
+            docs.append(top_item.get('text'))
             try:
-                meta = json.loads(item.get('metadata') or "{}")
+                meta = json.loads(top_item.get('metadata') or "{}")
             except Exception:
                 meta = {}
             for key in ("fileId", "fileName"):
-                val = item.get(key)
+                val = top_item.get(key)
                 if val:
                     meta.setdefault(key, val)
+            meta['similarity'] = round(top_similarity, 4)
             mds.append(meta)
+            logger.info(f"[query] Top result similarity: {top_similarity:.4f}")
 
-        logger.info(f"[query] Returned {len(ids)} results")
+        logger.info(f"[query] Returned {len(ids)} results (from {len(items)} fetched, {len(scored_items)} above threshold)")
         return {"ids": [ids], "documents": [docs], "metadatas": [mds]}
 
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:

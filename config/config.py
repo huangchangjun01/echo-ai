@@ -28,3 +28,8 @@ if not WEAVIATE_URL:
 WEAVIATE_CLASS: str = os.getenv("WEAVIATE_CLASS", "EchoDoc")
 # Qiniu (七牛云) base URL
 QINIU_BASE_URL: str = os.getenv("QINIU_BASE_URL", "tfpdkiq9g.hn-bkt.clouddn.com")
+
+# Vector similarity threshold (cosine similarity)
+# 余弦相似度阈值，取值范围 [-1, 1]，业界常规使用 0.7-0.8 作为阈值
+# 值越高表示要求越相似，默认 0.7
+VECTOR_SIMILARITY_THRESHOLD: float = float(os.getenv("VECTOR_SIMILARITY_THRESHOLD", "0.7"))
