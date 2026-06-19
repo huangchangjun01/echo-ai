@@ -1,35 +1,128 @@
-import os
+from __future__ import annotations
 
-try:
-    # optional - load .env if python-dotenv is installed
-    from dotenv import load_dotenv
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-    load_dotenv()
-except Exception:
-    pass
+_BASE_CONFIG = SettingsConfigDict(
+    env_file=".env",
+    env_file_encoding="utf-8",
+    extra="ignore",
+    case_sensitive=False,
+)
 
-# Weaviate connection settings - prefer environment variables
-# Support multiple ways to configure Weaviate endpoint
-# 1) Full URL via WEAVIATE_URL
-# 2) Or provide WEAVIATE_SCHEME, WEAVIATE_HOST, WEAVIATE_PORT
-WEAVIATE_URL: str = os.getenv("WEAVIATE_URL", "")
-if not WEAVIATE_URL:
-    host = os.getenv("WEAVIATE_HOST", "localhost")
-    scheme = os.getenv("WEAVIATE_SCHEME", "http")
-    port = os.getenv("WEAVIATE_PORT", "8080")
-    # If host already contains port, extract and use it
-    if ":" in host:
-        parts = host.rsplit(":", 1)
-        host = parts[0]
-        port = parts[1] if len(parts) > 1 else port
-    WEAVIATE_URL = f"{scheme}://{host}:{port}"
 
-# Default class name for storing documents in Weaviate (will be sanitized)
-WEAVIATE_CLASS: str = os.getenv("WEAVIATE_CLASS", "EchoDoc")
-# Qiniu (七牛云) base URL
-QINIU_BASE_URL: str = os.getenv("QINIU_BASE_URL", "tfpdkiq9g.hn-bkt.clouddn.com")
+class WeaviateSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="WEAVIATE_", **_BASE_CONFIG)
 
-# Vector similarity threshold (cosine similarity)
-# 余弦相似度阈值，取值范围 [-1, 1]，业界常规使用 0.7-0.8 作为阈值
-# 值越高表示要求越相似，默认 0.7
-VECTOR_SIMILARITY_THRESHOLD: float = float(os.getenv("VECTOR_SIMILARITY_THRESHOLD", "0.7"))
+    url: str | None = None
+    host: str = "localhost"
+    scheme: str = "http"
+    port: int = 8080
+    class_name: str = Field("EchoDoc", alias="class")
+    api_key: str | None = None
+
+    def resolved_host_port(self) -> tuple[str, int]:
+        """Return (host, port), tolerating a WEAVIATE_HOST that already embeds `:port`.
+
+        Some deployments (and the existing .env in this repo) set
+        `WEAVIATE_HOST=host:port`. Treat that as authoritative and fall back to
+        the dedicated `WEAVIATE_PORT` only when the host has no port suffix.
+        """
+        host = (self.host or "").strip()
+        if "@" in host:
+            host = host.rsplit("@", 1)[-1]
+        if host.startswith("["):
+            end = host.find("]")
+            if end != -1:
+                host_only = host[1:end]
+                port_str = host[end + 2 :] if end + 1 < len(host) and host[end + 1] == ":" else ""
+                return host_only, int(port_str) if port_str else self.port
+        if ":" in host:
+            host_only, _, port_str = host.rpartition(":")
+            try:
+                return host_only, int(port_str)
+            except ValueError:
+                return host_only, self.port
+        return host, self.port
+
+    def resolved_url(self) -> str:
+        if self.url:
+            return self.url
+        host, port = self.resolved_host_port()
+        return f"{self.scheme}://{host}:{port}"
+
+
+class QiniuSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="QINIU_", **_BASE_CONFIG)
+
+    base_url: str = ""
+    allowed_subdomains: list[str] = Field(default_factory=list)
+
+    @field_validator("allowed_subdomains", mode="before")
+    @classmethod
+    def _split(cls, v):
+        if isinstance(v, str):
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v
+
+
+class EmbeddingSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="EMBEDDING_", **_BASE_CONFIG)
+
+    model_name: str = "OFA-Sys/chinese-clip-vit-base-patch16"
+    device: str = "auto"
+    dim: int = 512
+    batch_size: int = 8
+    chunk_size: int = 256
+    chunk_overlap: int = 32
+    warmup_on_start: bool = True
+
+
+class IngestSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="INGEST_", **_BASE_CONFIG)
+
+    max_download_bytes: int = 50 * 1024 * 1024
+    download_timeout_seconds: int = 60
+    download_retries: int = 3
+    temp_dir: str | None = None
+    enable_chunking: bool = True
+    cache_ttl_seconds: int = 60
+    cache_maxsize: int = 256
+
+
+class Settings(BaseSettings):
+    """Top-level settings. Loaded from process env + .env (highest priority: env)."""
+
+    model_config = _BASE_CONFIG
+
+    weaviate: WeaviateSettings = Field(default_factory=WeaviateSettings)
+    qiniu: QiniuSettings = Field(default_factory=QiniuSettings)
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    ingest: IngestSettings = Field(default_factory=IngestSettings)
+
+    vector_similarity_threshold: float = Field(0.7, ge=-1.0, le=1.0)
+
+
+_cached: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Lazy-loaded settings singleton."""
+    global _cached
+    if _cached is None:
+        _cached = Settings()
+    return _cached
+
+
+def reload_settings() -> Settings:
+    global _cached
+    _cached = Settings()
+    return _cached
+
+
+# Backward-compat constants for legacy imports.
+settings = get_settings()
+WEAVIATE_URL: str = settings.weaviate.resolved_url()
+WEAVIATE_CLASS: str = settings.weaviate.class_name
+QINIU_BASE_URL: str = settings.qiniu.base_url
+VECTOR_SIMILARITY_THRESHOLD: float = settings.vector_similarity_threshold

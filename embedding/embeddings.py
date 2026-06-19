@@ -1,25 +1,25 @@
-from typing import List, Sequence
+from __future__ import annotations
 
-from langchain.embeddings.base import Embeddings
+import hashlib
+import io
+import logging
+from collections.abc import Sequence
+from typing import Any
 
-try:
-    from embedding import models as _repo_models
-    _has_repo_text = hasattr(_repo_models, "compute_text_embedding")
-    _has_repo_image = hasattr(_repo_models, "compute_embedding")
-except Exception:
-    _repo_models = None
-    _has_repo_text = False
-    _has_repo_image = False
+from langchain_core.embeddings import Embeddings
+
+from config.config import get_settings
+from embedding import models as _repo_models
+
+logger = logging.getLogger(__name__)
 
 
-def _sha256_fallback(texts: List[str]) -> List[List[float]]:
-    """Lightweight deterministic fallback using SHA256 hash."""
-    import hashlib
-    dim = 384
-    vecs = []
+def _sha256_fallback(texts: list[str], dim: int) -> list[list[float]]:
+    """Deterministic SHA256-based fallback used only when both CLIP and sentence-transformers are unavailable."""
+    vecs: list[list[float]] = []
     for t in texts:
-        h = hashlib.sha256(t.encode('utf-8')).digest()
-        vals = []
+        h = hashlib.sha256(t.encode("utf-8")).digest()
+        vals: list[float] = []
         i = 0
         while len(vals) < dim:
             b = h[i % len(h)]
@@ -29,25 +29,21 @@ def _sha256_fallback(texts: List[str]) -> List[List[float]]:
     return vecs
 
 
-def _image_fallback(images: List) -> List[List[float]]:
-    """Deterministic image fallback hashing bytes to a fixed-dim vector."""
-    import hashlib
-    import io
-    dim = 384
-    vecs = []
+def _image_fallback(images: Sequence[bytes | Any], dim: int) -> list[list[float]]:
+    vecs: list[list[float]] = []
     for img in images:
         if isinstance(img, bytes):
             b = img
         else:
             try:
-                from PIL import Image
+
                 buf = io.BytesIO()
-                img.save(buf, format='PNG')
+                img.save(buf, format="PNG")
                 b = buf.getvalue()
             except Exception:
-                b = str(img).encode('utf-8')
+                b = str(img).encode("utf-8")
         h = hashlib.sha256(b).digest()
-        vals = []
+        vals: list[float] = []
         i = 0
         while len(vals) < dim:
             byte = h[i % len(h)]
@@ -58,91 +54,88 @@ def _image_fallback(images: List) -> List[List[float]]:
 
 
 class ChineseCLIPEmbeddings(Embeddings):
-    """LangChain Embeddings wrapper.
+    """LangChain Embeddings wrapper around Chinese-CLIP.
 
-    Uses project's compute_text_embedding / compute_embedding if available,
-    otherwise falls back to sentence-transformers or lightweight SHA256 fallback.
+    Uses batched `compute_text_embeddings` / `compute_image_embeddings` from
+    `embedding.models`. Falls back to sentence-transformers for text, then to a
+    deterministic SHA256 vector for environments without ML deps (development only).
     """
 
-    def __init__(self, model_name: str | None = None, device: str = "cpu"):
-        self.device = device
-        self.model_name = model_name or "sentence-transformers/all-MiniLM-L6-v2"
+    def __init__(self, model_name: str | None = None, device: str | None = None):
+        settings = get_settings().embedding
+        self.dim = settings.dim
+        self.device = device or settings.device
+        self.model_name = model_name or settings.model_name
+        self._st = None
 
-        if _has_repo_text:
-            self._embed_fn = _repo_models.compute_text_embedding
+        # Prefer the project's CLIP batched functions when available.
+        if hasattr(_repo_models, "compute_text_embeddings"):
+            self._embed_fn = lambda texts: _repo_models.compute_text_embeddings(list(texts), device=self.device)
         else:
             try:
                 from sentence_transformers import SentenceTransformer
-                self._st = SentenceTransformer(self.model_name, device=self.device)
-                self._embed_fn = lambda texts: self._st.encode(texts, convert_to_numpy=False).tolist()
+
+                self._st = SentenceTransformer(self.model_name or "sentence-transformers/all-MiniLM-L6-v2", device=self.device)
+                self._embed_fn = lambda texts: [list(map(float, v)) for v in self._st.encode(list(texts))]
             except Exception:
-                self._st = None
-                self._embed_fn = _sha256_fallback
+                self._embed_fn = lambda texts: _sha256_fallback(list(texts), self.dim)
 
-        if _has_repo_image:
-            self._image_embed_fn = _repo_models.compute_embedding
+        if hasattr(_repo_models, "compute_image_embeddings"):
+            self._image_embed_fn = lambda images: _repo_models.compute_image_embeddings(list(images), device=self.device)
         else:
-            self._image_embed_fn = _image_fallback
+            self._image_embed_fn = lambda images: _image_fallback(list(images), self.dim)
 
-    def _normalize(self, res, dim: int = 384) -> List[List[float]]:
-        """Normalize embedding result to List[List[float]]."""
-        if res is None:
+    def warmup(self) -> None:
+        if hasattr(_repo_models, "warmup"):
+            try:
+                _repo_models.warmup(device=self.device)
+            except Exception as e:
+                logger.warning("warmup failed: %s", e)
+
+    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        texts = list(texts)
+        if not texts:
             return []
+        result = self._embed_fn(texts)
+        return self._normalize_batch(result, expected=len(texts))
+
+    def embed_query(self, text: str) -> list[float]:
+        vecs = self.embed_documents([text])
+        return vecs[0] if vecs else []
+
+    def embed_images(self, images: Sequence[Any]) -> list[list[float]]:
+        images = list(images)
+        if not images:
+            return []
+        result = self._image_embed_fn(images)
+        return self._normalize_batch(result, expected=len(images))
+
+    def embed_image(self, image: Any) -> list[float]:
+        vecs = self.embed_images([image])
+        return vecs[0] if vecs else []
+
+    def _normalize_batch(self, res: Any, expected: int) -> list[list[float]]:
+        if res is None:
+            return [[0.0] * self.dim for _ in range(expected)]
         try:
             res_list = res.tolist() if hasattr(res, "tolist") else res
         except Exception:
             res_list = res
-        if isinstance(res_list, (list, tuple)) and len(res_list) > 0 and all(isinstance(x, (int, float)) for x in res_list):
+
+        if isinstance(res_list, (list, tuple)) and res_list and all(isinstance(x, (int, float)) for x in res_list):
             return [[float(x) for x in res_list]]
-        if isinstance(res_list, (list, tuple)):
-            out = []
-            for item in res_list:
-                if item is None:
-                    continue
-                try:
-                    item_list = item.tolist() if hasattr(item, "tolist") else item
-                except Exception:
-                    item_list = list(item)
-                if isinstance(item_list, (list, tuple)) and all(isinstance(x, (int, float)) for x in item_list):
-                    out.append([float(x) for x in item_list])
-                else:
-                    try:
-                        out.append([float(x) for x in item_list])
-                    except Exception:
-                        continue
-            return out
-        return []
 
-    def embed_documents(self, texts: Sequence[str]) -> List[List[float]]:
-        texts = list(texts)
-        if _has_repo_text:
+        out: list[list[float]] = []
+        for item in res_list or []:
+            if item is None:
+                out.append([0.0] * self.dim)
+                continue
             try:
-                return self._normalize(self._embed_fn(texts))
+                item_list = item.tolist() if hasattr(item, "tolist") else list(item)
             except Exception:
-                pass
-            return self._normalize([self._embed_fn(t) for t in texts])
-        return self._normalize(self._embed_fn(texts))
-
-    def embed_query(self, text: str) -> List[float]:
-        if _has_repo_text:
-            for fn in (self._embed_fn, lambda t: self._embed_fn([t]), lambda t: self._embed_fn([t])):
-                try:
-                    vec = self._normalize(fn(text))
-                    if vec:
-                        return vec[0]
-                except Exception:
-                    pass
-        vec = self._normalize(self._embed_fn([text]))
-        return vec[0] if vec else []
-
-    def embed_images(self, images: Sequence) -> List[List[float]]:
-        if _has_repo_image:
-            try:
-                return self._normalize([self._image_embed_fn(img) for img in images])
-            except Exception:
-                pass
-        return self._normalize(self._image_embed_fn(list(images)))
-
-    def embed_image(self, image) -> List[float]:
-        vecs = self.embed_images([image])
-        return vecs[0] if vecs else []
+                continue
+            if all(isinstance(x, (int, float)) for x in item_list):
+                out.append([float(x) for x in item_list])
+        while len(out) < expected:
+            out.append([0.0] * self.dim)
+        return out[:expected]

@@ -3,16 +3,31 @@ uvicorn[standard]==0.24.0
 torch==2.6.0
 transformers==4.35.0
 Pillow==10.1.0
-python-multipart==0.0.6   # 用于处理文件上传
+python-multipart==0.0.6
 
 # LangChain + Vector DB
 langchain>=0.0.300
+langchain-core>=0.1.0
+langchain-text-splitters>=0.0.1
 sentence-transformers>=2.2.2
 
-# typing helpers
-typing-extensions>=4.5.0
+# Weaviate v4 client
+weaviate-client>=4.5.0
 
-# Weaviate client support and optional dotenv for config
-weaviate-client>=3.0.0
+# Config / validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
-requests>=2.30.0
+
+# Async HTTP + retry + caching
+httpx>=0.25.0
+tenacity>=8.2.0
+cachetools>=5.3.0
+
+# File type detection
+python-magic-bin>=0.4.14; sys_platform == "win32"
+python-magic>=0.4.27; sys_platform != "win32"
+
+# Tests
+pytest>=7.4.0
+pytest-asyncio>=0.23.0

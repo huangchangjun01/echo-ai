@@ -1,10 +1,22 @@
 
-from .models import load_model, compute_embedding, compute_text_embedding
 from .embeddings import ChineseCLIPEmbeddings
+from .models import (
+    compute_embedding,
+    compute_image_embeddings,
+    compute_text_embedding,
+    compute_text_embeddings,
+    detect_device,
+    load_model,
+    warmup,
+)
 
 __all__ = [
-    "load_model",
-    "compute_embedding",
-    "compute_text_embedding",
     "ChineseCLIPEmbeddings",
+    "compute_embedding",
+    "compute_image_embeddings",
+    "compute_text_embedding",
+    "compute_text_embeddings",
+    "detect_device",
+    "load_model",
+    "warmup",
 ]
