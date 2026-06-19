@@ -86,8 +86,8 @@ class IngestSettings(BaseSettings):
     download_retries: int = 3
     temp_dir: str | None = None
     enable_chunking: bool = True
-    cache_ttl_seconds: int = 60
-    cache_maxsize: int = 256
+    cache_ttl_seconds: int = 600
+    cache_maxsize: int = 1024
 
 
 class Settings(BaseSettings):

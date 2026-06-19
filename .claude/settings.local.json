@@ -17,7 +17,8 @@
       "Bash(awk '{print $2}')",
       "Bash(TaskStop *)",
       "Bash(pkill -f \"python -c\")",
-      "Bash(ruff check *)"
+      "Bash(ruff check *)",
+      "Bash(tasklist)"
     ]
   }
 }
