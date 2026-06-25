@@ -1,0 +1,50 @@
+# Checklist
+
+- [x] Git 分支 echo_refactor 已从 master 创建并切换
+- [x] config.py 包含 MySQL 配置类（DBHost, DBPort, DBUser, DBPassword, DBName）
+- [x] config.py 包含 LLM 配置类（小模型和大模型的 base_url, model, api_key）
+- [x] config.py 包含记忆系统配置（分层阈值、去重阈值）
+- [x] config.py 包含多模态 Embedding 配置（BGE-M3, CLIP, Whisper, VideoMAE）
+- [x] .env 文件包含所有新增配置项
+- [x] .env.example 文件同步更新
+- [x] database/mysql.py 实现 MySQL 连接池管理
+- [x] database/models.py 定义 core_memories 表模型
+- [x] database/models.py 定义 memory_relations 表模型
+- [x] database/models.py 定义 memory_summaries 表模型
+- [x] memory/extract.py 实现原子事实 + 因果关系抽取
+- [x] memory/extract.py 实现语义去重逻辑
+- [x] memory/extract.py 实现关系识别（causes/update/contradict/extend）
+- [x] memory/extract.py 实现情感标注（emotion_tag + intensity）
+- [x] memory/extract.py 实现分层归档（L0/L1/L2）
+- [x] memory/extract.py 实现相似记忆合并 + 矛盾清理
+- [x] memory/extract.py 实现记忆摘要生成
+- [x] memory/retrieve.py 实现 L0 MySQL 全量加载核心记忆
+- [x] memory/retrieve.py 实现 L1 Weaviate 向量检索 Top-K
+- [x] memory/retrieve.py 实现因果链 MySQL 查询
+- [x] memory/retrieve.py 实现多模态跨模态检索
+- [x] memory/archiver.py 实现 L0/L1/L2 分层归档写入 MySQL
+- [x] llm/inference.py 实现小模型快速前缀生成
+- [x] llm/inference.py 实现大模型深度续写
+- [x] llm/inference.py 实现流式级联输出
+- [x] llm/react.py 实现轻量 ReAct 循环
+- [x] tools/understand_image.py 实现进程内视觉模型图片理解
+- [x] tools/understand_audio.py 实现进程内语音模型理解
+- [x] tools/search_memory.py 实现 Weaviate + MySQL 记忆搜索
+- [x] tools/analyze_emotion.py 实现进程内情感分析
+- [x] embedding/bge_m3.py 实现 BGE-M3（768维）文本 Embedding
+- [x] embedding/whisper.py 实现 Whisper 音频转录 + 声纹嵌入
+- [x] embedding/video_mae.py 实现 VideoMAE/关键帧 CLIP 视频 Embedding
+- [x] embedding/__init__.py 统一导出多模态 embedding 接口
+- [x] app/agent_runner.py 新增 `/v1/chat/completions` 接口
+- [x] app/agent_runner.py 保留原有 `/chat` 和 `/search` 接口
+- [x] app/agent_runner.py lifespan 中初始化 MySQL、记忆模块、工具模块
+- [x] app/agent_runner.py 对话完成后异步触发记忆抽取
+- [x] requirements.txt 包含所有新增依赖
+- [x] refactor_report.md 存在且包含删除部分和保留部分的详细对比
+- [x] 服务成功启动无报错
+- [x] `/health` 接口返回 {"status": "ok"}
+- [x] `/v1/chat/completions` 接口测试通过
+- [x] `/chat` 接口（向量检索）测试通过
+- [x] 服务在自测后已关闭，端口已释放
+- [x] 代码已提交到 echo_refactor 分支
+- [x] 代码已 push 到远程 echo_refactor 分支
