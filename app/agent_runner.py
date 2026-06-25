@@ -291,9 +291,21 @@ async def ingest_file_endpoint(req: IngestRequest, background: BackgroundTasks, 
 
 
 @app.get("/health")
-async def health_check():
-    """Lightweight health endpoint so the service can be probed by uptime checks."""
-    return {"status": "ok"}
+async def health_check(request: Request):
+    """健康检查，同时报告各依赖服务的可用状态。"""
+    app_state = request.app.state
+    deps = {
+        "weaviate": getattr(app_state, "vectorstore", None) is not None,
+        "mysql": getattr(app_state, "mysql_available", False),
+        "llm": _LLM_AVAILABLE,
+        "memory": _MEMORY_AVAILABLE,
+        "tools": _TOOLS_AVAILABLE,
+    }
+    all_ok = all(deps.values())
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "dependencies": deps,
+    }
 
 
 # ── 新增接口：POST /v1/chat/completions ───────────────────────────

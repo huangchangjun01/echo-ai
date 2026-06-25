@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  echo-ai:
+    build: .
+    container_name: echo-ai
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # 容器内访问宿主机或其他容器的服务，按需修改
+      - WEAVIATE_HOST=${WEAVIATE_HOST:-121.43.145.179:8080}
+      - DB_HOST=${DB_HOST:-121.43.145.179}
+    restart: unless-stopped
+    depends_on:
+      weaviate:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    volumes:
+      # 持久化 HuggingFace 模型缓存，避免每次重启重新下载
+      - hf_cache:/app/.cache/huggingface
+
+  # ── 可选：本地 Weaviate ────────────────────────────────────────
+  weaviate:
+    image: semitechnologies/weaviate:1.24.10
+    container_name: weaviate
+    ports:
+      - "8080:8080"
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      ENABLE_MODULES: ""
+      CLUSTER_HOSTNAME: "node1"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 可选：本地 MySQL ───────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-echo_ai_pass}
+      MYSQL_DATABASE: ${DB_NAME:-huangchangjun}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  weaviate_data:
+  mysql_data:
+  hf_cache:
