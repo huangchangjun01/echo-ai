@@ -19,6 +19,10 @@ pydantic>=2.5.0
 pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
 
+# Database / ORM
+sqlalchemy[asyncio]>=2.0.0
+aiomysql>=0.2.0
+
 # Async HTTP + retry + caching
 httpx>=0.25.0
 tenacity>=8.2.0
@@ -31,3 +35,17 @@ python-magic>=0.4.27; sys_platform != "win32"
 # Tests
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
+
+# === 新增依赖 ===
+# MySQL 异步驱动
+aiomysql>=0.2.0
+# ORM
+sqlalchemy[asyncio]>=2.0.0
+# OpenAI 兼容 API 客户端
+openai>=1.0.0
+# 视频关键帧提取（headless 版本无需 GUI）
+opencv-python-headless>=4.8.0
+# 视频帧提取备选
+imageio[ffmpeg]>=2.31.0
+# 音频处理
+soundfile>=0.12.0

@@ -70,20 +70,47 @@ class ChineseCLIPEmbeddings(Embeddings):
 
         # Prefer the project's CLIP batched functions when available.
         if hasattr(_repo_models, "compute_text_embeddings"):
-            self._embed_fn = lambda texts: _repo_models.compute_text_embeddings(list(texts), device=self.device)
-        else:
-            try:
-                from sentence_transformers import SentenceTransformer
+            def _clip_fallback(texts: list[str]) -> list[list[float]]:
+                try:
+                    return _repo_models.compute_text_embeddings(list(texts), device=self.device)
+                except Exception as e:
+                    logger.warning("CLIP text embedding failed, falling back: %s", e)
+                    return self._fallback_fn(texts)
 
-                self._st = SentenceTransformer(self.model_name or "sentence-transformers/all-MiniLM-L6-v2", device=self.device)
-                self._embed_fn = lambda texts: [list(map(float, v)) for v in self._st.encode(list(texts))]
-            except Exception:
-                self._embed_fn = lambda texts: _sha256_fallback(list(texts), self.dim)
+            self._embed_fn = _clip_fallback
+        else:
+            self._embed_fn = self._build_fallback()
 
         if hasattr(_repo_models, "compute_image_embeddings"):
-            self._image_embed_fn = lambda images: _repo_models.compute_image_embeddings(list(images), device=self.device)
+            def _img_fallback(images: list) -> list[list[float]]:
+                try:
+                    return _repo_models.compute_image_embeddings(list(images), device=self.device)
+                except Exception as e:
+                    logger.warning("CLIP image embedding failed, falling back: %s", e)
+                    return _image_fallback(list(images), self.dim)
+
+            self._image_embed_fn = _img_fallback
         else:
             self._image_embed_fn = lambda images: _image_fallback(list(images), self.dim)
+
+    def _build_fallback(self):
+        """Build a fallback embedding function (sentence-transformers or SHA256)."""
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            self._st = SentenceTransformer(
+                self.model_name or "sentence-transformers/all-MiniLM-L6-v2",
+                device=self.device,
+            )
+            return lambda texts: [list(map(float, v)) for v in self._st.encode(list(texts))]
+        except Exception:
+            return lambda texts: _sha256_fallback(list(texts), self.dim)
+
+    @property
+    def _fallback_fn(self):
+        if not hasattr(self, "_fallback"):
+            self._fallback = self._build_fallback()
+        return self._fallback
 
     def warmup(self) -> None:
         if hasattr(_repo_models, "warmup"):
