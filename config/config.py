@@ -90,22 +90,6 @@ class IngestSettings(BaseSettings):
     cache_maxsize: int = 1024
 
 
-# ── MySQL 数据库配置 ──────────────────────────────────────────────
-class MySQLSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="DB_", **_BASE_CONFIG)
-
-    host: str = "127.0.0.1"
-    port: int = 3306
-    user: str = "root"
-    password: str = ""
-    name: str = "echo_ai"
-
-    @property
-    def dsn(self) -> str:
-        """返回 aiomysql 兼容的 DSN 连接字符串."""
-        return f"mysql+aiomysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
-
-
 # ── LLM 模型配置（小模型 + 大模型） ────────────────────────────────
 class SmallModelSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SMALL_LLM_", **_BASE_CONFIG)
@@ -210,16 +194,27 @@ class Settings(BaseSettings):
 
     model_config = _BASE_CONFIG
 
+    # ── 数据库配置（直接映射 DB_* 环境变量） ────────────────────────
+    db_host: str = Field(default="127.0.0.1", validation_alias="DB_HOST")
+    db_port: int = Field(default=3306, validation_alias="DB_PORT")
+    db_user: str = Field(default="root", validation_alias="DB_USER")
+    db_password: str = Field(default="", validation_alias="DB_PASSWORD")
+    db_name: str = Field(default="echo_ai", validation_alias="DB_NAME")
+
     weaviate: WeaviateSettings = Field(default_factory=WeaviateSettings)
     qiniu: QiniuSettings = Field(default_factory=QiniuSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
-    mysql: MySQLSettings = Field(default_factory=MySQLSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     multimodal: MultiModalSettings = Field(default_factory=MultiModalSettings)
 
     vector_similarity_threshold: float = Field(0.7, ge=-1.0, le=1.0)
+
+    @property
+    def db_dsn(self) -> str:
+        """返回 aiomysql 兼容的 DSN 连接字符串."""
+        return f"mysql+aiomysql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 
 _cached: Settings | None = None
@@ -245,4 +240,4 @@ WEAVIATE_URL: str = settings.weaviate.resolved_url()
 WEAVIATE_CLASS: str = settings.weaviate.class_name
 QINIU_BASE_URL: str = settings.qiniu.base_url
 VECTOR_SIMILARITY_THRESHOLD: float = settings.vector_similarity_threshold
-DB_DSN: str = settings.mysql.dsn
+DB_DSN: str = settings.db_dsn

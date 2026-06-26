@@ -24,8 +24,8 @@ def get_engine() -> AsyncEngine:
     if _engine is None:
         with _engine_lock:
             if _engine is None:
-                settings = get_settings().mysql
-                dsn = settings.dsn
+                settings = get_settings()
+                dsn = settings.db_dsn
                 logger.info("Creating async engine: %s", dsn)
                 _engine = create_async_engine(
                     dsn,
