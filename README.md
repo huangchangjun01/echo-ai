@@ -1,148 +1,137 @@
 # Echo-AI
 
-一个基于 **Chinese-CLIP + Weaviate v4 + LangChain** 的多模态 RAG（检索增强生成）服务，提供文本/图像的向量化、向量检索与文件入库能力。
-
-> 项目源码与提交记录中保留的旧说明仅供迁移参考；当前实现已切换到 **Weaviate v4** 客户端，使用 LangChain 风格的 Embeddings / Tool 抽象，并使用 `pydantic-settings` 做配置中心。
+基于多模态 Embedding + Weaviate 向量库 + 分层记忆的对话 Agent 服务。文本、图像、音频、视频统一向量化入库；对话时按意图分流，仅在检索/图片类请求下触发 RAG 跨模态检索。
 
 ---
 
-## 1. 业务功能
+## 核心能力
 
-| 功能 | 说明 |
-| --- | --- |
-| 多模态 Embedding | 基于 `OFA-Sys/chinese-clip-vit-base-patch16`，对中文文本与图像生成同一向量空间下的表征（支持批量推理、CUDA / MPS / CPU 自动选择） |
-| 文本/图像入库 | 通过七牛云对象存储下载文件，使用 libmagic 探测 MIME 后分流到文本（按 chunk_size 切片）或图像 embedding，写入 Weaviate |
-| 相似度检索 | 余弦相似度检索，按阈值过滤后返回 top-k，附带真实 Weaviate UUID 与相似度得分 |
-| 缓存 | 检索结果按 `(query, k, where)` 缓存到进程内 LRU+TTL，避免重复 embedding |
-| Agent 工具 | `utils/tools.py` 中封装了 `VectorSearchTool`（`langchain_core.tools.BaseTool`），可被 ReAct / function-calling agent 直接调用 |
-| 健康检查 | `/health` 端点，便于存活/就绪探针 |
-| 入库防护 | 下载大小限制 + SSRF 防护（拒绝内网/loopback）+ tenacity 重试 |
+- **多模态检索**：Chinese-CLIP（图/文同空间，512 维）+ BGE-M3（文本 768 维）+ Whisper（语音转写）+ Video-MAE
+- **对话记忆**：L0（长期事实）/ L1（近期摘要）/ L2，因果链跨条关联，persona 与情绪日志持久化
+- **意图识别闸门**：每次 chat 先用小模型把消息分到 `chat / recall / text_search / image_search / doc_search`，按意图决定是否触发 RAG
+- **ReAct + 级联**：LLM 自主调工具（search_memory / understand_image / understand_audio / analyze_emotion），首字级联（大模型续写小模型前缀）
+- **流式 SSE**：实时返回 prefix / delta / resource / tool / context / done 事件，前端按帧渲染
 
 ---
 
-## 2. 技术栈
-
-- **Web 框架**：FastAPI 0.104 + Uvicorn 0.24（lifespan 内预热 embedding & 初始化向量库）
-- **多模态模型**：Chinese-CLIP（`OFA-Sys/chinese-clip-vit-base-patch16`，HuggingFace Transformers + PyTorch）
-- **向量库**：Weaviate v4 client（`weaviate-client>=4.5`，client-side embedding）
-- **LLM 接入**（配置项）：Qwen（DashScope）、SiliconFlow 等 OpenAI 兼容接口
-- **对象存储**：七牛云（通过 `QINIU_BASE_URL` + `fileKey` 拼装下载链接）
-- **工具链**：LangChain、langchain-text-splitters、sentence-transformers、pydantic-settings、httpx、tenacity、python-magic
-- **测试**：pytest + pytest-asyncio
-
----
-
-## 3. 目录结构
+## 目录结构
 
 ```
 echo-ai/
 ├── app/
-│   └── agent_runner.py        # FastAPI 入口，lifespan 内预热 embedding & 初始化向量库
+│   └── agent_runner.py            # FastAPI 入口 + lifespan（DB pool / schema / 模型预热）
 ├── biz/
-│   └── ingest.py              # 异步入库任务：下载 → MIME 探测 → 分块 → embedding → 写向量库
+│   ├── chat.py                    # 流式 chat：意图识别 → ReAct → 级联输出
+│   └── ingest.py                  # 入库：下载 → MIME 探测 → 分块 → embedding → Weaviate
 ├── config/
-│   └── config.py              # pydantic-settings 配置中心
+│   ├── config.py                  # pydantic-settings 配置中心
+│   └── prompts.py                 # 提示词模板（系统提示 / 抽取 / 去重 / 情感 / 意图）
+├── database/
+│   ├── mysql.py                   # aiomysql 连接池（同步回退到 pymysql）
+│   └── schema_sql.py              # MySQL DDL + ALTER 补齐（启动时幂等）
 ├── embedding/
-│   ├── embeddings.py          # LangChain Embeddings 实现（ChineseCLIPEmbeddings）
-│   └── models.py              # Chinese-CLIP 模型加载、批量推理、设备选择、warmup
-├── llm/                       # LLM 接入预留目录（待扩展）
+│   ├── models.py                  # 统一入口：按 modality 选模型
+│   ├── clip.py                    # Chinese-CLIP（图文跨模态）
+│   ├── bge_m3.py                  # BGE-M3（文本）
+│   ├── whisper.py                 # 语音转写
+│   └── video_mae.py               # 视频
+├── llm/
+│   ├── client.py                  # OpenAI 兼容客户端（大模型 + 小模型）
+│   ├── cascade.py                 # 大小模型级联（首字延迟优化）
+│   ├── react.py                   # ReAct 循环（决策 → 派发工具 → 续写）
+│   └── intent.py                  # 意图分类（小模型 JSON 输出 + fallback）
+├── memory/
+│   ├── retriever.py               # L0/L1 加载 + 多模态跨模态检索 + persona
+│   └── extractor.py               # 对话抽取 → 记忆落库 + 因果链
+├── tools/
+│   ├── search_memory.py           # 并行检索 EchoMemory + EchoDoc
+│   ├── understand_image.py        # 图像描述（CLIP + LLM）
+│   ├── understand_audio.py        # 语音转写 + 描述
+│   └── analyze_emotion.py         # 情感分析（LLM + 关键词 fallback）
 ├── utils/
-│   ├── downloader.py          # 异步下载 + 大小限制 + SSRF 防护
-│   └── tools.py               # LangChain BaseTool 封装（VectorSearchTool）
+│   ├── downloader.py              # 异步下载 + SSRF 防护 + 大小限制
+│   ├── request_context.py         # ContextVar + 日志 merge_extra
+│   └── tools.py                   # LangChain BaseTool 封装
 ├── vector/
-│   └── vector_store.py        # Weaviate v4 向量库封装（含 TTL 缓存、top-k 检索）
-├── tests/                     # 单元测试（mock embedder / mock weaviate / TestClient）
-├── .github/workflows/ci.yml   # GitHub Actions：lint + test
-├── pyproject.toml             # ruff + pytest 配置
-├── run.py                     # uvicorn 启动入口
+│   ├── vector_store.py            # EchoDoc（图/文档库）
+│   └── memory_store.py            # EchoMemory（对话记忆库）
+├── tests/                         # pytest + pytest-asyncio
+├── run.py                         # uvicorn 启动入口
+├── pyproject.toml                 # ruff + pytest 配置
 ├── requirements.txt
-├── .env                       # 运行配置（含密钥，请勿提交到公开仓库）
-└── .env.example               # 配置示例
+└── .env / .env.example            # 配置
 ```
 
 ---
 
-## 4. 环境与配置
+## 数据存储
 
-`.env` 中的关键项（完整列表见 `.env.example`）：
+### MySQL（5 张表，启动时自动建表 + 补列）
 
-```ini
-# Weaviate
-WEAVIATE_URL=                       # 优先使用；为空时按 host/scheme/port 拼接
-WEAVIATE_HOST=localhost
-WEAVIATE_SCHEME=http
-WEAVIATE_PORT=8080
-WEAVIATE_CLASS=EchoDoc
-WEAVIATE_API_KEY=
+| 表 | 用途 |
+| --- | --- |
+| `personas` | 用户人格画像 |
+| `memories` | 分层记忆（`level` = L0 长期 / L1 近期摘要 / L2） |
+| `memory_relations` | 记忆间的因果链（source / target / relation / weight） |
+| `memory_extract_logs` | 抽取任务日志（pending / ok / error） |
+| `emotion_logs` | 情感分析日志 |
 
-# 七牛云对象存储
-QINIU_BASE_URL=tfpdkiq9g.hn-bkt.clouddn.com
-QINIU_ALLOWED_SUBDOMAINS=           # 留空时自动从 BASE_URL 推断
+### Weaviate（2 个 collection）
 
-# Embedding
-EMBEDDING_MODEL_NAME=OFA-Sys/chinese-clip-vit-base-patch16
-EMBEDDING_DEVICE=auto               # auto | cuda | mps | cpu
-EMBEDDING_DIM=512
-EMBEDDING_BATCH_SIZE=8
-EMBEDDING_CHUNK_SIZE=256
-EMBEDDING_CHUNK_OVERLAP=32
-EMBEDDING_WARMUP_ON_START=true
-
-# Ingest
-INGEST_MAX_DOWNLOAD_BYTES=52428800  # 50 MB
-INGEST_DOWNLOAD_TIMEOUT_SECONDS=60
-INGEST_DOWNLOAD_RETRIES=3
-INGEST_ENABLE_CHUNKING=true
-INGEST_CACHE_TTL_SECONDS=600
-INGEST_CACHE_MAXSIZE=1024
-
-# 检索阈值（余弦相似度，范围 [-1, 1]，默认 0.7）
-VECTOR_SIMILARITY_THRESHOLD=0.7
-```
-
-> 通过 `1 - distance` 计算余弦相似度，命中阈值后才会进入返回列表；top-k 由客户端传入。
+- **EchoDoc**：CLIP 512 维，存用户上传的图片、文本片段、音频转写（前端 RAG 资料库）
+- **EchoMemory**：BGE-M3 768 维，存对话记忆、L1 摘要
 
 ---
 
-## 5. API 速查
+## 意图识别闸门
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | `/chat` | 检索 + 返回 top-k 候选（已校验 query/k） |
-| POST | `/search` | `/chat` 的简化版别名 |
-| POST | `/ingest_file` | 入库任务，后台异步执行 |
-| GET  | `/health` | 存活/就绪探针，返回 `{"status":"ok"}` |
+每次对话入口先调小模型把消息分类，按意图分流：
+
+| intent | multimodal_search 预注入 | L1 hint 注入 | search_memory 工具 |
+| --- | :---: | :---: | :---: |
+| `chat` | ❌ | ❌ | ✅ |
+| `recall` | ❌ | ✅ | ✅ |
+| `text_search` | ❌ | ✅ | ✅ |
+| `image_search` | ✅ | ✅ | ✅ |
+| `doc_search` | ❌ | ✅ | ✅ |
+
+任何失败（超时 / 解析错误 / 标签无效）一律回退到 `chat`（最保守，不查 RAG），由 SSE `context` 事件的 `intent_source` 字段记录真实分类来源。
+
+配置项：`MEMORY_INTENT_CLASSIFIER_ENABLED`（默认 True）、`MEMORY_INTENT_TIMEOUT_MS`（默认 1500）。
 
 ---
 
-## 6. 快速开始
+## 快速开始
 
-```powershell
-# 1. 创建并激活虚拟环境
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# 2. 安装依赖
-pip install --upgrade pip
+```bash
+# 1. 安装依赖
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-# 3. 准备 .env（参考 .env.example）
+# 2. 准备配置
+cp .env.example .env   # 填入 MySQL / Weaviate / LLM / QINIU 等
+
+# 3. 启动 Weaviate（v4，独立部署）
+docker run -d --name weaviate -p 8080:8080 \
+  -e AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
+  semitechnologies/weaviate:1.24.x
 
 # 4. 启动服务
-python run.py
-# 监听 0.0.0.0:8000；run.py 自动检测 PyCharm Debug 模式
+python run.py    # 监听 0.0.0.0:8000
 
-# 5. 运行测试
+# 5. 测试
 pytest
 ```
 
-> Weaviate 服务本身需单独启动（v4）。可通过 Docker：
-> `docker run -d --name weaviate -p 8080:8080 -e AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true semitechnologies/weaviate:1.24.x`
-
 ---
 
-## 7. 已知未实现
+## API
 
-- **第 1 点**（`/chat` 接入 LLM 生成最终答案）—— 保留 `/chat` 仅返回候选，由上层服务拼 prompt。
-- **第 13 点**（Prometheus 指标 / 探活式 health）—— `/health` 仅返回 `{"status":"ok"}`，未暴露 `/metrics`，监控按需再加。
-- **第 17 点**（API Key / JWT / CORS）—— 当前端点无鉴权，对外暴露前需加 `CORSMiddleware` + FastAPI `Security`。
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/chat` | 流式 SSE：意图识别 → ReAct → 级联生成（events: `context` / `tool` / `prefix` / `delta` / `resource` / `done`） |
+| POST | `/ingest_file` | 入库任务，后台异步执行 |
+| GET  | `/health` | 健康检查 |
+
+SSE `context` 事件新增字段（前端可消费）：`intent` / `intent_source` / `intent_ms`。
+SSE `resource` 事件字段：`url` / `name` / `modality` / `mime_type` / `similarity` —— 前端按 `modality` 决定渲染 `<img>` / `<audio>` / `<video>` / 下载链接。

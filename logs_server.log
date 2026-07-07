@@ -1,0 +1,119 @@
+INFO:     Started server process [4116]
+INFO:     Waiting for application startup.
+2026-06-26 21:45:36,936 - app.agent_runner - INFO - Starting Echo-AI v2.0 | threshold=0.300 | llm=MiniMax-M3 | db=121.43.145.179:3306/huangchangjun
+2026-06-26 21:45:37,055 - database.mysql - INFO - aiomysql pool created: 121.43.145.179:3306/huangchangjun
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'personas' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'core_memories' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'memories' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'memory_relations' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'memory_extract_logs' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'emotion_logs' already exists
+  await self._query(query)
+2026-06-26 21:45:37,727 - database.mysql - INFO - MySQL schema ensured
+2026-06-26 21:45:37,727 - app.agent_runner - INFO - MySQL schema ready
+2026-06-26 21:45:37,727 - app.agent_runner - INFO - Echo-AI ready
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-06-26 21:45:37,911 - embedding.bge_m3 - INFO - Loading BGE-M3 model=BAAI/bge-m3 device=cpu
+2026-06-26 21:45:38,789 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:38,883 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:39,135 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-06-26 21:45:39,135 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:     127.0.0.1:56981 - "GET /health HTTP/1.1" 200 OK
+2026-06-26 21:45:39,228 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:39,229 - sentence_transformers.base.model - INFO - Loading SentenceTransformer model from BAAI/bge-m3.
+2026-06-26 21:45:39,486 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:39,577 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:39,829 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:39,921 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/README.md "HTTP/1.1 200 OK"
+2026-06-26 21:45:40,179 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:40,271 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:40,981 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:41,073 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:41,330 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:41,584 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:41,676 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:41,946 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/model.safetensors "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:42,202 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 391/391 [00:00<00:00, 36480.32it/s]
+2026-06-26 21:45:42,598 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:42,599 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/main "HTTP/1.1 200 OK"
+2026-06-26 21:45:42,850 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:43,115 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:43,128 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/discussions?p=0 "HTTP/1.1 200 OK"
+2026-06-26 21:45:43,541 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/refs%2Fpr%2F130 "HTTP/1.1 200 OK"
+2026-06-26 21:45:43,676 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:43,797 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors.index.json "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:43,923 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:44,017 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:44,051 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors "HTTP/1.1 302 Found"
+2026-06-26 21:45:44,281 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:44,323 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/xet-read-token/9a0624b896d81da7492a910ffa53731274b6cf3d "HTTP/1.1 200 OK"
+2026-06-26 21:45:44,374 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:44,629 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:45,016 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:45,389 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:45,485 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:45,746 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-06-26 21:45:46,002 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-06-26 21:45:48,281 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-26 21:45:48,890 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-26 21:45:48,987 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-06-26 21:45:49,568 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 1/1 [00:00<00:00,  4.48it/s]Batches: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 1/1 [00:00<00:00,  4.48it/s]
+2026-06-26 21:45:49,799 - embedding.bge_m3 - INFO - BGE-M3 warmup done
+INFO:     127.0.0.1:60624 - "POST /embedding HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60649 - "GET /health HTTP/1.1" 200 OK
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: 'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+  await self._query(query)
+INFO:     127.0.0.1:60650 - "POST /persona HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60651 - "GET /persona?user_id=alice HTTP/1.1" 200 OK
+2026-06-26 21:47:43,459 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 21:47:44,170 - vector.memory_store - INFO - MemoryVectorStore at http://121.43.145.179:8080 class=EchoMemory
+2026-06-26 21:47:44,273 - httpx - INFO - HTTP Request: GET http://121.43.145.179:8080/v1/schema/EchoMemory "HTTP/1.1 404 Not Found"
+2026-06-26 21:47:44,273 - vector.memory_store - INFO - Creating memory collection EchoMemory
+2026-06-26 21:47:44,518 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/schema "HTTP/1.1 200 OK"
+2026-06-26 21:47:44,644 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:44,645 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21884, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21891, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21907, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:44,645 - memory.extractor - WARNING - dedup_one failed: Weaviate GraphQL errors: [{'locations': [{'column': 21884, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21891, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21907, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:44,790 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:44,790 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21868, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21875, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21891, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:44,790 - memory.extractor - WARNING - dedup_one failed: Weaviate GraphQL errors: [{'locations': [{'column': 21868, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21875, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21891, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:44,929 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:44,929 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21817, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21824, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21840, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:44,929 - memory.extractor - WARNING - dedup_one failed: Weaviate GraphQL errors: [{'locations': [{'column': 21817, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21824, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21840, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:45,068 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:45,068 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21840, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21847, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21863, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:45,069 - memory.extractor - WARNING - dedup_one failed: Weaviate GraphQL errors: [{'locations': [{'column': 21840, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21847, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21863, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:45,214 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:45,215 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21858, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21865, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21881, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:45,215 - memory.extractor - WARNING - dedup_one failed: Weaviate GraphQL errors: [{'locations': [{'column': 21858, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21865, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21881, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:45,592 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/batch/objects "HTTP/1.1 200 OK"
+2026-06-26 21:47:45,660 - vector.memory_store - INFO - Memory insert 5 into EchoMemory
+2026-06-26 21:47:47,417 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:60652 - "POST /memory/extract HTTP/1.1" 200 OK
+2026-06-26 21:47:48,243 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:48,243 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21858, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21865, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21881, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:48,244 - memory.retriever - WARNING - multimodal_search failed: Weaviate GraphQL errors: [{'locations': [{'column': 21858, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21865, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21881, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+INFO:     127.0.0.1:60686 - "POST /memory/retrieve HTTP/1.1" 200 OK
+2026-06-26 21:47:51,939 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:60690 - "POST /tools/call HTTP/1.1" 200 OK
+2026-06-26 21:47:52,273 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:52,274 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21858, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21865, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21881, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:52,274 - tools.search_memory - WARNING - weaviate search failed: Weaviate GraphQL errors: [{'locations': [{'column': 21858, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21865, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21881, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+INFO:     127.0.0.1:60691 - "POST /tools/call HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60695 - "POST /embedding HTTP/1.1" 200 OK
+2026-06-26 21:47:52,724 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-26 21:47:52,725 - vector.memory_store - ERROR - memory query failed: Weaviate GraphQL errors: [{'locations': [{'column': 21888, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21895, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21911, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:52,725 - memory.retriever - WARNING - multimodal_search failed: Weaviate GraphQL errors: [{'locations': [{'column': 21888, 'line': 1}], 'message': 'Cannot query field "fileId" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21895, 'line': 1}], 'message': 'Cannot query field "fileName" on type "EchoMemory".', 'path': None}, {'locations': [{'column': 21911, 'line': 1}], 'message': 'Cannot query field "chunkIndex" on type "EchoMemory".', 'path': None}]
+2026-06-26 21:47:59,591 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:60696 - "POST /chat HTTP/1.1" 200 OK
+2026-06-26 21:48:08,624 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 21:48:08,661 - memory.extractor - INFO - memory extract done user=alice inserted=0 summary_len=0
+INFO:     127.0.0.1:58315 - "GET /health HTTP/1.1" 200 OK

@@ -1,19 +1,29 @@
+"""启动入口：从 settings 读取 host/port。"""
+
+from __future__ import annotations
+
 import sys
 
 import uvicorn
 
-if __name__ == "__main__":
-    # 检测是否在 PyCharm Debug 模式下
-    is_debug = 'pydevd' in sys.modules
+from config.config import get_settings
 
-    if is_debug:
-        # Debug 模式：手动启动，避免 loop_factory 冲突
+
+def main() -> None:
+    settings = get_settings().app
+    host = settings.host
+    port = settings.port
+
+    if "pydevd" in sys.modules:
+        # PyCharm Debug 模式：手动启动避免 loop_factory 冲突
         import asyncio
 
-        config = uvicorn.Config("app.agent_runner:app", host="0.0.0.0", port=8000)
+        config = uvicorn.Config("app.agent_runner:app", host=host, port=port, log_level="info")
         server = uvicorn.Server(config)
-        asyncio.run(server.serve())  # 不传递 loop_factory
+        asyncio.run(server.serve())
     else:
-        # 普通模式：正常启动
-        # Run the LangChain-based agent runner
-        uvicorn.run("app.agent_runner:app", host="0.0.0.0", port=8000, reload=False)
+        uvicorn.run("app.agent_runner:app", host=host, port=port, reload=False, log_level="info")
+
+
+if __name__ == "__main__":
+    main()

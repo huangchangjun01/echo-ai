@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from functools import lru_cache
+from typing import Any
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 _BASE_CONFIG = SettingsConfigDict(
     env_file=".env",
@@ -19,15 +23,15 @@ class WeaviateSettings(BaseSettings):
     scheme: str = "http"
     port: int = 8080
     class_name: str = Field("EchoDoc", alias="class")
+    memory_class: str = Field("EchoMemory", alias="memoryClass")
     api_key: str | None = None
 
-    def resolved_host_port(self) -> tuple[str, int]:
-        """Return (host, port), tolerating a WEAVIATE_HOST that already embeds `:port`.
+    # 阈值：CLIP 跨模态 cosine 通常 0.20~0.45，BGE-M3 文本相似 0.5~0.95。
+    # 共用 0.7 会把 CLIP 命中全部过滤掉，因此按 collection 分开配置。
+    doc_threshold: float = Field(0.25, ge=-1.0, le=1.0)
+    memory_threshold: float = Field(0.7, ge=-1.0, le=1.0)
 
-        Some deployments (and the existing .env in this repo) set
-        `WEAVIATE_HOST=host:port`. Treat that as authoritative and fall back to
-        the dedicated `WEAVIATE_PORT` only when the host has no port suffix.
-        """
+    def resolved_host_port(self) -> tuple[str, int]:
         host = (self.host or "").strip()
         if "@" in host:
             host = host.rsplit("@", 1)[-1]
@@ -66,6 +70,54 @@ class QiniuSettings(BaseSettings):
         return v
 
 
+class DBSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="DB_", **_BASE_CONFIG)
+
+    host: str = "127.0.0.1"
+    port: int = 3306
+    user: str = "root"
+    password: str = ""
+    name: str = "echo_ai"
+    pool_min: int = 1
+    pool_max: int = 10
+
+    def resolved_dsn(self) -> dict[str, Any]:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "user": self.user,
+            "password": self.password,
+            "db": self.name,
+        }
+
+
+class LLMSettings(BaseSettings):
+    """OpenAI 兼容 LLM 配置：大模型主用 + 情感微模型（小模型）前缀。"""
+
+    model_config = SettingsConfigDict(env_prefix="LLM_", **_BASE_CONFIG)
+
+    provider: str = "openai"
+    base_url: str = "https://api.openai.com/v1"
+    api_key: str = ""
+
+    # 大模型
+    model: str = "gpt-4o-mini"
+    max_tokens: int = 2048
+    temperature: float = 0.7
+
+    # 小模型（情感微模型 / 快速前缀）
+    small_model: str = "gpt-4o-mini"
+    small_max_tokens: int = 64
+    small_temperature: float = 0.5
+    small_base_url: str = ""
+    small_api_key: str = ""
+
+    def small_resolved(self) -> tuple[str, str]:
+        base = self.small_base_url or self.base_url
+        key = self.small_api_key or self.api_key
+        return base, key
+
+
 class EmbeddingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EMBEDDING_", **_BASE_CONFIG)
 
@@ -76,6 +128,34 @@ class EmbeddingSettings(BaseSettings):
     chunk_size: int = 256
     chunk_overlap: int = 32
     warmup_on_start: bool = True
+
+
+class BGEM3Settings(BaseSettings):
+    """BGE-M3 文本向量：768 维。失败时回退到 CLIP / sentence-transformers。"""
+
+    model_config = SettingsConfigDict(env_prefix="BGE_M3_", **_BASE_CONFIG)
+
+    model: str = "BAAI/bge-m3"
+    dim: int = 768
+    device: str = "auto"
+
+
+class MemorySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="MEMORY_", **_BASE_CONFIG)
+
+    l0_limit: int = 20
+    l1_topk: int = 8
+    l2_topk: int = 20
+    dedup_threshold: float = 0.92
+    react_max_iter: int = 3
+    enable_async_extract: bool = True
+    # 单次搜索最多返回的命中数；默认 1，UI 只展示最相关的一条。
+    search_max_hits: int = 1
+
+    # 意图识别闸门：每次 chat 先用小模型分类（chat/recall/text_search/image_search/doc_search），
+    # 仅在 image_search 等检索类意图下才触发 RAG 跨模态预注入。
+    intent_classifier_enabled: bool = True
+    intent_timeout_ms: int = 1500
 
 
 class IngestSettings(BaseSettings):
@@ -90,24 +170,40 @@ class IngestSettings(BaseSettings):
     cache_maxsize: int = 1024
 
 
+class AppSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="APP_", **_BASE_CONFIG)
+
+    host: str = "0.0.0.0"
+    port: int = 8000
+    log_level: str = "INFO"
+
+
 class Settings(BaseSettings):
-    """Top-level settings. Loaded from process env + .env (highest priority: env)."""
+    """顶级配置中心：从 .env + 进程环境变量加载（env 优先）。"""
 
     model_config = _BASE_CONFIG
 
     weaviate: WeaviateSettings = Field(default_factory=WeaviateSettings)
     qiniu: QiniuSettings = Field(default_factory=QiniuSettings)
+    db: DBSettings = Field(default_factory=DBSettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    bge_m3: BGEM3Settings = Field(default_factory=BGEM3Settings)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
+    app: AppSettings = Field(default_factory=AppSettings)
 
     vector_similarity_threshold: float = Field(0.7, ge=-1.0, le=1.0)
+    # 兼容旧字段：doc 端阈值
+    doc_similarity_threshold: float | None = None
 
 
 _cached: Settings | None = None
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Lazy-loaded settings singleton."""
+    """延迟初始化的 settings 单例（lru_cache 保证进程内唯一）。"""
     global _cached
     if _cached is None:
         _cached = Settings()
@@ -117,10 +213,10 @@ def get_settings() -> Settings:
 def reload_settings() -> Settings:
     global _cached
     _cached = Settings()
+    get_settings.cache_clear()
     return _cached
 
 
-# Backward-compat constants for legacy imports.
 settings = get_settings()
 WEAVIATE_URL: str = settings.weaviate.resolved_url()
 WEAVIATE_CLASS: str = settings.weaviate.class_name

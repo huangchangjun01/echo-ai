@@ -3,12 +3,15 @@ from __future__ import annotations
 import io
 import logging
 import threading
+import time
 from collections.abc import Sequence
 from typing import Any
 
 import torch
 from PIL import Image
 from transformers import ChineseCLIPModel, ChineseCLIPProcessor
+
+from utils.request_context import merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +41,36 @@ def _load_internal(device: str = "auto") -> tuple[ChineseCLIPModel, ChineseCLIPP
         if _model is None:
             target_device = detect_device(device)
             model_name = "OFA-Sys/chinese-clip-vit-base-patch16"
-            logger.info("Loading Chinese-CLIP model=%s on device=%s", model_name, target_device)
+            t0 = time.perf_counter()
+            logger.info(
+                "loading Chinese-CLIP",
+                extra=merge_extra(
+                    stage="clip_load",
+                    event="start",
+                    model=model_name,
+                    device=str(target_device),
+                ),
+            )
             _model = ChineseCLIPModel.from_pretrained(model_name)
             _processor = ChineseCLIPProcessor.from_pretrained(model_name)
             _model.eval()
             _model.to(target_device)
             _device = target_device
-            logger.info("Chinese-CLIP model loaded")
+            logger.info(
+                "Chinese-CLIP model loaded",
+                extra=merge_extra(
+                    stage="clip_load",
+                    event="ok",
+                    model=model_name,
+                    device=str(target_device),
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                ),
+            )
+        else:
+            logger.debug(
+                "Chinese-CLIP model cached",
+                extra=merge_extra(stage="clip_load", event="cached", device=str(_device)),
+            )
     return _model, _processor, _device
 
 
@@ -64,9 +90,20 @@ def warmup(device: str = "auto", batch_size: int = 1) -> None:
             _ = _normalize(features)
         if target_device.type == "cuda":
             torch.cuda.synchronize()
-        logger.info("Embedding warmup completed on %s", target_device)
+        logger.info(
+            "Embedding warmup completed",
+            extra=merge_extra(stage="clip_warmup", event="ok", device=str(target_device)),
+        )
     except Exception as e:  # warmup failures must not crash the service
-        logger.warning("Embedding warmup failed: %s", e)
+        logger.warning(
+            "Embedding warmup failed",
+            extra=merge_extra(
+                stage="clip_warmup",
+                event="error",
+                device=str(target_device),
+                error=str(e)[:200],
+            ),
+        )
 
 
 def _normalize(features: torch.Tensor) -> torch.Tensor:
@@ -118,15 +155,37 @@ def compute_text_embeddings(texts: Sequence[str], device: str = "auto") -> list[
     if not texts:
         return []
     model, processor, target_device = _load_internal(device)
+    t0 = time.perf_counter()
     try:
         with torch.no_grad():
             inputs = processor(text=texts, return_tensors="pt", padding=True, truncation=True)
             inputs = _to_device(inputs, target_device)
             features = _extract_text_features(model.get_text_features(**inputs), target_device)
             features = _normalize(features)
-            return features.cpu().tolist()
+            out = features.cpu().tolist()
+        logger.info(
+            "text embedding ok",
+            extra=merge_extra(
+                stage="clip_text",
+                event="ok",
+                count=len(texts),
+                dim=len(out[0]) if out else 0,
+                device=str(target_device),
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            ),
+        )
+        return out
     except Exception as e:
-        logger.error("compute_text_embeddings failed: %s", e)
+        logger.exception(
+            "compute_text_embeddings failed",
+            extra=merge_extra(
+                stage="clip_text",
+                event="error",
+                count=len(texts),
+                device=str(target_device),
+                error=str(e)[:300],
+            ),
+        )
         raise
 
 
@@ -139,15 +198,37 @@ def compute_image_embeddings(
     if not pil_images:
         return []
     model, processor, target_device = _load_internal(device)
+    t0 = time.perf_counter()
     try:
         with torch.no_grad():
             inputs = processor(images=pil_images, return_tensors="pt")
             inputs = _to_device(inputs, target_device)
             features = _extract_image_features(model.get_image_features(**inputs), target_device)
             features = _normalize(features)
-            return features.cpu().tolist()
+            out = features.cpu().tolist()
+        logger.info(
+            "image embedding ok",
+            extra=merge_extra(
+                stage="clip_image",
+                event="ok",
+                count=len(pil_images),
+                dim=len(out[0]) if out else 0,
+                device=str(target_device),
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            ),
+        )
+        return out
     except Exception as e:
-        logger.error("compute_image_embeddings failed: %s", e)
+        logger.exception(
+            "compute_image_embeddings failed",
+            extra=merge_extra(
+                stage="clip_image",
+                event="error",
+                count=len(pil_images),
+                device=str(target_device),
+                error=str(e)[:300],
+            ),
+        )
         raise
 
 

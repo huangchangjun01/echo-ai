@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 import uuid as _uuid
 from collections.abc import Sequence
 from typing import Any
@@ -11,6 +12,7 @@ import httpx
 from cachetools import TTLCache
 
 from config.config import get_settings
+from utils.request_context import merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -66,21 +68,40 @@ def _escape(value: Any) -> str:
     return str(value).replace("\\", "\\\\").replace('"', '\\"')
 
 
+# Default document fields for the document store (EchoDoc).
+# Memory store uses a different schema and passes its own list.
+_DEFAULT_DOC_FIELDS = (
+    "text metadata fileId fileName userId chunkIndex _additional { id distance }"
+)
+
+
 def _build_search_query(
     class_name: str,
     vector: list[float],
     limit: int,
     where: dict[str, Any] | None,
+    fields: str | tuple[str, ...] | None = None,
 ) -> str:
+    """Build a nearVector Get query.
+
+    `fields` lets callers override the property list (e.g. the memory store
+    uses a different schema without fileId/fileName/chunkIndex). When None,
+    falls back to the document-store default.
+    """
     where_block = _where_clause_gql(where) if where else ""
     vector_lit = _format_vector(vector)
+    if fields is None:
+        field_block = _DEFAULT_DOC_FIELDS
+    elif isinstance(fields, tuple):
+        field_block = " ".join(fields)
+    else:
+        field_block = str(fields)
     return (
         f"{{ Get {{ {class_name}("
         f"nearVector: {{vector: {vector_lit}}}, "
         f"limit: {int(limit)}"
         f"{where_block}"
-        f") {{ text metadata fileId fileName userId chunkIndex "
-        f"_additional {{ id distance }} }} }} }}"
+        f") {{ {field_block} }} }} }}"
     )
 
 
@@ -230,7 +251,14 @@ class WeaviateVectorStore:
     def __init__(self, client: Any | None = None, enable_cache: bool = True):
         settings = get_settings()
         self.class_name: str = settings.weaviate.class_name
-        self.threshold: float = settings.vector_similarity_threshold
+        # EchoDoc 存的是 Chinese-CLIP 512 维向量，跨模态 cosine 通常 0.20~0.45；
+        # 共用 0.7 会过滤掉所有命中。这里用 doc_threshold 兜底，老字段 vector_similarity_threshold 仍兼容。
+        self.threshold: float = (
+            settings.weaviate.doc_threshold
+            if getattr(settings.weaviate, "doc_threshold", None) is not None
+            else getattr(settings, "doc_similarity_threshold", None)
+            or settings.vector_similarity_threshold
+        )
         self.enable_cache = enable_cache
         self._cache: TTLCache | None = (
             TTLCache(maxsize=settings.ingest.cache_maxsize, ttl=settings.ingest.cache_ttl_seconds)
@@ -330,11 +358,23 @@ class WeaviateVectorStore:
             objects.append(obj)
             returned_ids.append(uuid)
 
+        t0 = time.perf_counter()
         returned = self._http.batch_insert(objects)
+        insert_ms = round((time.perf_counter() - t0) * 1000, 2)
         if self._cache is not None:
             with self._cache_lock:
                 self._cache.clear()
-        logger.info("Inserted %d objects into %s", len(returned) or len(returned_ids), self.class_name)
+        inserted_count = len(returned or returned_ids)
+        logger.info(
+            "vector add_texts",
+            extra=merge_extra(
+                stage="vector_add",
+                event="ok",
+                class_name=self.class_name,
+                count=inserted_count,
+                http_ms=insert_ms,
+            ),
+        )
         return returned or returned_ids
 
     # ---------- read ----------
@@ -355,6 +395,7 @@ class WeaviateVectorStore:
         Returns a dict shaped like Chroma's response so existing callers don't need to adapt:
             {"ids": [[...]], "documents": [[...]], "metadatas": [[...]], "distances": [[...]]}
         """
+        t_total = time.perf_counter()
         if embedding_fn is None:
             raise ValueError("query() requires an embedding_fn")
         if not query_text:
@@ -367,26 +408,61 @@ class WeaviateVectorStore:
             )
 
         cache_key = None
+        cache_hit = False
         if self._cache is not None:
             cache_key = (query_text, int(n_results), json.dumps(where or {}, sort_keys=True))
             cached = self._cache.get(cache_key)
             if cached is not None:
+                cache_hit = True
+                logger.info(
+                    "vector query cache hit",
+                    extra=merge_extra(
+                        stage="vector_query",
+                        event="cache_hit",
+                        class_name=self.class_name,
+                        n_results=n_results,
+                        tenant=tenant_id,
+                        query_preview=(query_text or "")[:80],
+                    ),
+                )
                 return cached
 
         try:
+            t0 = time.perf_counter()
             q_emb = embedding_fn([query_text])[0]
+            embed_ms = round((time.perf_counter() - t0) * 1000, 2)
         except Exception as e:
-            logger.error("embedding_fn call failed: %s", e)
+            logger.error(
+                "embedding_fn call failed",
+                extra=merge_extra(
+                    stage="vector_query",
+                    event="embed_error",
+                    class_name=self.class_name,
+                    tenant=tenant_id,
+                    error=str(e)[:200],
+                ),
+            )
             raise ValueError("embedding_fn call failed.") from e
 
         fetch_limit = max(int(n_results) * 10, 20)
         query = _build_search_query(self.class_name, list(q_emb), fetch_limit, where)
 
         try:
+            t1 = time.perf_counter()
             payload = self._http.graphql(query)
+            http_ms = round((time.perf_counter() - t1) * 1000, 2)
             items = _extract_get_payload(payload, self.class_name)
         except Exception as e:
-            logger.error("Weaviate query failed: %s", e)
+            logger.error(
+                "Weaviate query failed",
+                extra=merge_extra(
+                    stage="vector_query",
+                    event="http_error",
+                    class_name=self.class_name,
+                    tenant=tenant_id,
+                    error=str(e)[:300],
+                ),
+            )
             raise
 
         scored: list[tuple[float, str, dict[str, Any]]] = []
@@ -401,12 +477,14 @@ class WeaviateVectorStore:
                 scored.append((similarity, str(obj_id), item))
 
         scored.sort(key=lambda x: x[0], reverse=True)
+        raw_hits = len(scored)
         scored = scored[: int(n_results)]
 
         ids: list[str] = []
         docs: list[str] = []
         mds: list[dict[str, Any]] = []
         distances: list[float] = []
+        score_dist: list[float] = []
         for similarity, obj_id, item in scored:
             ids.append(obj_id)
             docs.append(item.get("text", ""))
@@ -420,13 +498,34 @@ class WeaviateVectorStore:
             meta["similarity"] = round(similarity, 4)
             mds.append(meta)
             distances.append(round(1.0 - similarity, 6))
+            score_dist.append(round(similarity, 4))
 
         result = {"ids": [ids], "documents": [docs], "metadatas": [mds], "distances": [distances]}
         if cache_key is not None and self._cache is not None:
             with self._cache_lock:
                 self._cache[cache_key] = result
+        top_score = max(score_dist) if score_dist else 0.0
+        median_score = sorted(score_dist)[len(score_dist) // 2] if score_dist else 0.0
         logger.info(
-            "query returned %d (k=%d, threshold=%.3f)", len(ids), n_results, self.threshold
+            "vector query",
+            extra=merge_extra(
+                stage="vector_query",
+                event="ok",
+                class_name=self.class_name,
+                tenant=tenant_id,
+                n_results=n_results,
+                fetch_limit=fetch_limit,
+                threshold=self.threshold,
+                raw_hits=raw_hits,
+                final_hits=len(ids),
+                top_score=round(top_score, 4),
+                median_score=round(median_score, 4),
+                cache_hit=cache_hit,
+                embed_ms=embed_ms,
+                http_ms=http_ms,
+                duration_ms=round((time.perf_counter() - t_total) * 1000, 2),
+                query_preview=(query_text or "")[:80],
+            ),
         )
         return result
 

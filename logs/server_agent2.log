@@ -1,0 +1,152 @@
+INFO:     Started server process [23864]
+INFO:     Waiting for application startup.
+2026-06-27 00:37:05,282 - app.agent_runner - INFO - Starting Echo-AI v2.0 | threshold=0.300 | llm=MiniMax-M3 | db=121.43.145.179:3306/huangchangjun
+2026-06-27 00:37:05,426 - database.mysql - INFO - aiomysql pool created: 121.43.145.179:3306/huangchangjun
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'personas' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'core_memories' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'memories' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'memory_relations' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'memory_extract_logs' already exists
+  await self._query(query)
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'emotion_logs' already exists
+  await self._query(query)
+2026-06-27 00:37:06,079 - database.mysql - INFO - MySQL schema ensured
+2026-06-27 00:37:06,079 - app.agent_runner - INFO - MySQL schema ready
+2026-06-27 00:37:06,079 - app.agent_runner - INFO - Echo-AI agent ready
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-06-27 00:37:06,288 - embedding.bge_m3 - INFO - Loading BGE-M3 model=BAAI/bge-m3 device=cpu
+2026-06-27 00:37:07,436 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-06-27 00:37:07,437 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-06-27 00:37:07,882 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:08,206 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:08,332 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:08,334 - sentence_transformers.base.model - INFO - Loading SentenceTransformer model from BAAI/bge-m3.
+2026-06-27 00:37:08,650 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:08,774 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:09,086 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:09,515 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/README.md "HTTP/1.1 200 OK"
+2026-06-27 00:37:09,834 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:09,960 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:10,270 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:10,394 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:10,712 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:11,033 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:11,158 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:11,495 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/model.safetensors "HTTP/1.1 404 Not Found"
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 391/391 [00:00<00:00, 29747.38it/s]
+2026-06-27 00:37:11,814 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-27 00:37:12,174 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/main "HTTP/1.1 200 OK"
+2026-06-27 00:37:12,257 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:12,516 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/discussions?p=0 "HTTP/1.1 200 OK"
+2026-06-27 00:37:12,573 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:12,897 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:13,221 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:13,348 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/refs%2Fpr%2F130 "HTTP/1.1 200 OK"
+2026-06-27 00:37:13,540 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:13,664 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:13,676 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors.index.json "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:13,981 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:14,106 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:14,108 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors "HTTP/1.1 302 Found"
+2026-06-27 00:37:14,461 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:14,588 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:14,920 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:15,046 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-27 00:37:15,367 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-06-27 00:37:15,847 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-06-27 00:37:18,198 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-27 00:37:18,537 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-27 00:37:18,664 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:64595 - "GET /persona HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64596 - "GET /persona?user_id=alice HTTP/1.1" 404 Not Found
+2026-06-27 00:37:18,991 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:64597 - "GET /memory/extract HTTP/1.1" 404 Not Found
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]INFO:     127.0.0.1:64598 - "GET /memory/retrieve HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64599 - "GET /memory/causal/1?user_id=alice HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64600 - "GET /tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64601 - "GET /tools/call HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64602 - "GET /embedding HTTP/1.1" 404 Not Found
+Batches: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 1/1 [00:00<00:00,  3.14it/s]Batches: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 1/1 [00:00<00:00,  3.14it/s]
+2026-06-27 00:37:19,328 - embedding.bge_m3 - INFO - BGE-M3 warmup done
+2026-06-27 00:37:20,067 - vector.memory_store - INFO - MemoryVectorStore at http://121.43.145.179:8080 class=EchoMemory
+2026-06-27 00:37:20,141 - httpx - INFO - HTTP Request: GET http://121.43.145.179:8080/v1/schema/EchoMemory "HTTP/1.1 200 OK"
+2026-06-27 00:37:20,232 - httpx - INFO - HTTP Request: GET http://121.43.145.179:8080/v1/schema/EchoMemory "HTTP/1.1 200 OK"
+2026-06-27 00:37:20,349 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:37:26,634 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:37:38,152 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:37:38,456 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:37:38,573 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:37:38,877 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/batch/objects "HTTP/1.1 200 OK"
+2026-06-27 00:37:38,912 - vector.memory_store - INFO - Memory insert 2 into EchoMemory
+2026-06-27 00:37:41,757 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:37:42,032 - memory.extractor - INFO - memory extract done user=agent-1782491838 inserted=0 summary_len=27
+INFO:     127.0.0.1:64603 - "POST /chat HTTP/1.1" 200 OK
+2026-06-27 00:37:46,331 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:37:48,661 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:37:53,322 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:37:53,679 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:37:53,799 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:37:54,167 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/batch/objects "HTTP/1.1 200 OK"
+2026-06-27 00:37:54,205 - vector.memory_store - INFO - Memory insert 2 into EchoMemory
+2026-06-27 00:38:02,353 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:38:02,738 - memory.extractor - WARNING - insert relation failed: (1364, "Field 'relation_type' doesn't have a default value")
+2026-06-27 00:38:02,812 - memory.extractor - INFO - memory extract done user=agent-1782491838 inserted=2 summary_len=50
+INFO:     127.0.0.1:54780 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62096 - "GET /health HTTP/1.1" 200 OK
+2026-06-27 00:38:03,552 - vector.vector_store - INFO - Connected to Weaviate (REST) at http://121.43.145.179:8080
+2026-06-27 00:38:03,631 - httpx - INFO - HTTP Request: GET http://121.43.145.179:8080/v1/schema/EchoDoc "HTTP/1.1 200 OK"
+2026-06-27 00:38:03,733 - httpx - INFO - HTTP Request: GET http://121.43.145.179:8080/v1/schema/EchoDoc "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:62097 - "POST /ingest_file HTTP/1.1" 200 OK
+2026-06-27 00:38:04,780 - httpx - INFO - HTTP Request: GET https://example.com/nonexistent.txt "HTTP/1.1 404 Not Found"
+2026-06-27 00:38:04,780 - biz.ingest - WARNING - download attempt failed: HTTP 404 for https://example.com/nonexistent.txt
+2026-06-27 00:38:06,776 - httpx - INFO - HTTP Request: GET https://example.com/nonexistent.txt "HTTP/1.1 404 Not Found"
+2026-06-27 00:38:06,779 - biz.ingest - WARNING - download attempt failed: HTTP 404 for https://example.com/nonexistent.txt
+2026-06-27 00:38:09,761 - httpx - INFO - HTTP Request: GET https://example.com/nonexistent.txt "HTTP/1.1 404 Not Found"
+2026-06-27 00:38:09,765 - biz.ingest - WARNING - download attempt failed: HTTP 404 for https://example.com/nonexistent.txt
+2026-06-27 00:38:09,765 - biz.ingest - ERROR - download failed file_id=f-test-001 url=https://example.com/nonexistent.txt: HTTP 404 for https://example.com/nonexistent.txt
+INFO:     127.0.0.1:49670 - "GET /persona HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49671 - "GET /persona?user_id=alice HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49676 - "GET /memory/extract HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49677 - "GET /memory/retrieve HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49681 - "GET /memory/causal/1?user_id=alice HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49682 - "GET /tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49683 - "GET /tools/call HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49684 - "GET /embedding HTTP/1.1" 404 Not Found
+2026-06-27 00:38:29,779 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:33,322 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:38:41,473 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:38:41,801 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:41,930 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:42,079 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:42,219 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:42,360 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:42,757 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/batch/objects "HTTP/1.1 200 OK"
+2026-06-27 00:38:42,826 - vector.memory_store - INFO - Memory insert 5 into EchoMemory
+2026-06-27 00:38:45,387 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:38:45,977 - memory.extractor - INFO - memory extract done user=agent-1782491909 inserted=5 summary_len=62
+INFO:     127.0.0.1:49685 - "POST /chat HTTP/1.1" 200 OK
+2026-06-27 00:38:50,204 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:38:53,917 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:39:16,717 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:39:16,760 - memory.extractor - INFO - memory extract done user=agent-1782491909 inserted=0 summary_len=0
+INFO:     127.0.0.1:49712 - "POST /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49726 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49727 - "POST /ingest_file HTTP/1.1" 200 OK
+2026-06-27 00:39:18,982 - httpx - INFO - HTTP Request: GET https://example.com/nonexistent.txt "HTTP/1.1 404 Not Found"
+2026-06-27 00:39:18,982 - biz.ingest - WARNING - download attempt failed: HTTP 404 for https://example.com/nonexistent.txt
+2026-06-27 00:39:21,367 - httpx - INFO - HTTP Request: GET https://example.com/nonexistent.txt "HTTP/1.1 404 Not Found"
+2026-06-27 00:39:21,371 - biz.ingest - WARNING - download attempt failed: HTTP 404 for https://example.com/nonexistent.txt
+2026-06-27 00:39:25,164 - httpx - INFO - HTTP Request: GET https://example.com/nonexistent.txt "HTTP/1.1 404 Not Found"
+2026-06-27 00:39:25,166 - biz.ingest - WARNING - download attempt failed: HTTP 404 for https://example.com/nonexistent.txt
+2026-06-27 00:39:25,166 - biz.ingest - ERROR - download failed file_id=f-test-001 url=https://example.com/nonexistent.txt: HTTP 404 for https://example.com/nonexistent.txt
+INFO:     127.0.0.1:49738 - "POST /chat HTTP/1.1" 200 OK
+2026-06-27 00:39:35,827 - httpx - INFO - HTTP Request: POST http://121.43.145.179:8080/v1/graphql "HTTP/1.1 200 OK"
+2026-06-27 00:39:38,361 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:39:40,891 - httpx - INFO - HTTP Request: POST https://api.minimaxi.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 00:39:40,933 - memory.extractor - INFO - memory extract done user=stream-test inserted=0 summary_len=0

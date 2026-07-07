@@ -1,9 +1,5 @@
-"""Compatibility shim that exposes get_vector_store backed by Weaviate.
+"""app 包：FastAPI 入口与路由。"""
 
-This module mirrors the previous public API so other app modules can continue to import
-from app.vector_store import get_vector_store
-"""
-from vector.vector_store import WeaviateVectorStore, get_vector_store
+from .agent_runner import app
 
-__all__ = ["WeaviateVectorStore", "get_vector_store"]
-
+__all__ = ["app"]

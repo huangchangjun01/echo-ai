@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,6 +12,7 @@ from config.config import get_settings
 from embedding.embeddings import ChineseCLIPEmbeddings
 from embedding.models import compute_image_embeddings, compute_text_embeddings
 from utils.downloader import DownloadError, download_file_async
+from utils.request_context import log_stage, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +127,8 @@ def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
 async def _download_with_retry(url: str) -> bytes:
     settings = get_settings().ingest
     last_exc: Exception | None = None
+    attempt_idx = 0
+    t0 = time.perf_counter()
     async for attempt in AsyncRetrying(
         stop=stop_after_attempt(max(1, settings.download_retries)),
         wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -132,11 +136,34 @@ async def _download_with_retry(url: str) -> bytes:
         reraise=True,
     ):
         with attempt:
+            attempt_idx += 1
             try:
-                return await download_file_async(url)
+                data = await download_file_async(url)
+                logger.info(
+                    "download ok",
+                    extra=merge_extra(
+                        stage="download",
+                        event="ok",
+                        attempt=attempt_idx,
+                        bytes=len(data),
+                        url=url,
+                        duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                    ),
+                )
+                return data
             except Exception as e:
                 last_exc = e
-                logger.warning("download attempt failed: %s", e)
+                logger.warning(
+                    "download attempt failed",
+                    extra=merge_extra(
+                        stage="download",
+                        event="retry",
+                        attempt=attempt_idx,
+                        url=url,
+                        error=str(e)[:200],
+                        elapsed_ms=round((time.perf_counter() - t0) * 1000, 2),
+                    ),
+                )
                 raise
     if last_exc:
         raise last_exc
@@ -162,32 +189,122 @@ async def ingest_file(
     file_name = file_obj.get("fileName") or ""
     file_key = file_obj.get("fileKey")
     url = _resolve_url(file_key, file_obj.get("url"))
+    t0 = time.perf_counter()
+    logger.info(
+        "ingest start",
+        extra=merge_extra(
+            stage="ingest",
+            event="start",
+            file_id=file_id,
+            file_name=file_name,
+            has_file_key=bool(file_key),
+            url=url,
+        ),
+    )
     if not url:
+        logger.error(
+            "ingest missing url",
+            extra=merge_extra(stage="ingest", event="error", error="missing url"),
+        )
         return IngestResult(False, file_id, error="Missing URL")
 
     try:
         data = await _download_with_retry(url)
     except Exception as e:
-        logger.error("download failed file_id=%s url=%s: %s", file_id, url, e)
+        logger.error(
+            "ingest download failed",
+            extra=merge_extra(
+                stage="ingest",
+                event="download_error",
+                file_id=file_id,
+                url=url,
+                error=str(e)[:300],
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            ),
+        )
         return IngestResult(False, file_id, error=f"Download failed: {e}")
 
     mime = _detect_mime(data)
+    logger.info(
+        "ingest mime detected",
+        extra=merge_extra(
+            stage="ingest",
+            event="mime",
+            file_id=file_id,
+            mime=mime,
+            bytes=len(data),
+        ),
+    )
 
     if mime in SUPPORTED_IMAGE_MIMES:
-        return await _ingest_image(user_id, file_id, file_name, url, data, embeddings, vectorstore)
+        result = await _ingest_image(user_id, file_id, file_name, url, data, embeddings, vectorstore)
+        result_log_common(result, t0)
+        return result
 
     if mime in REJECTED_BINARY_MIMES:
+        logger.error(
+            "ingest rejected mime",
+            extra=merge_extra(
+                stage="ingest",
+                event="rejected",
+                file_id=file_id,
+                mime=mime,
+            ),
+        )
         return IngestResult(False, file_id, error=f"Unsupported binary content type: {mime}")
 
     if mime.startswith("text/") or mime in SUPPORTED_TEXT_MIMES:
         text = _decode_text(data)
-        return await _ingest_text(user_id, file_id, file_name, url, text, embeddings, vectorstore)
+        logger.info(
+            "ingest text decoded",
+            extra=merge_extra(
+                stage="ingest",
+                event="text_decoded",
+                file_id=file_id,
+                text_len=len(text),
+                mime=mime,
+            ),
+        )
+        result = await _ingest_text(user_id, file_id, file_name, url, text, embeddings, vectorstore)
+        result_log_common(result, t0)
+        return result
 
+    logger.error(
+        "ingest unsupported mime",
+        extra=merge_extra(stage="ingest", event="unsupported_mime", file_id=file_id, mime=mime),
+    )
     return IngestResult(
         False,
         file_id,
         error=f"Unsupported content type: {mime}",
     )
+
+
+def result_log_common(result: IngestResult, t0: float) -> None:
+    """统一记录 ingest 终态日志。"""
+    elapsed = round((time.perf_counter() - t0) * 1000, 2)
+    if result.success:
+        logger.info(
+            "ingest ok",
+            extra=merge_extra(
+                stage="ingest",
+                event="ok",
+                file_id=result.file_id,
+                chunks=result.chunks,
+                duration_ms=elapsed,
+            ),
+        )
+    else:
+        logger.error(
+            "ingest failed",
+            extra=merge_extra(
+                stage="ingest",
+                event="error",
+                file_id=result.file_id,
+                err=result.error or "",
+                duration_ms=elapsed,
+            ),
+        )
 
 
 async def _ingest_text(
@@ -199,19 +316,50 @@ async def _ingest_text(
     embeddings: ChineseCLIPEmbeddings,
     vectorstore: Any,
 ) -> IngestResult:
-    settings = get_settings().ingest
-    if not settings.enable_chunking or len(text) <= settings.max_download_bytes // 1024:
+    ingest_settings = get_settings().ingest
+    embed_settings = get_settings().embedding
+    if not ingest_settings.enable_chunking or len(text) <= ingest_settings.max_download_bytes // 1024:
         chunks = [text] if text else []
+        chunk_strategy = "passthrough"
     else:
         chunks = _split_text(text, chunk_size=0, chunk_overlap=0)
+        chunk_strategy = "split"
+
+    logger.info(
+        "ingest chunks ready",
+        extra=merge_extra(
+            stage="ingest_text",
+            event="chunks",
+            file_id=file_id,
+            chunk_count=len(chunks),
+            chunk_strategy=chunk_strategy,
+            chunk_size=embed_settings.chunk_size,
+            chunk_overlap=embed_settings.chunk_overlap,
+        ),
+    )
 
     if not chunks:
         return IngestResult(False, file_id, error="Empty text content")
 
     try:
+        t = time.perf_counter()
         vectors = await asyncio.to_thread(compute_text_embeddings, chunks)
+        logger.info(
+            "text embedding ok",
+            extra=merge_extra(
+                stage="ingest_text",
+                event="embed_ok",
+                file_id=file_id,
+                vector_count=len(vectors),
+                dim=len(vectors[0]) if vectors else 0,
+                duration_ms=round((time.perf_counter() - t) * 1000, 2),
+            ),
+        )
     except Exception as e:
-        logger.error("text embedding failed file_id=%s: %s", file_id, e)
+        logger.exception(
+            "text embedding failed",
+            extra=merge_extra(stage="ingest_text", event="embed_error", file_id=file_id),
+        )
         return IngestResult(False, file_id, error=f"Embedding failed: {e}")
 
     base_meta = {
@@ -220,13 +368,28 @@ async def _ingest_text(
         "userId": user_id,
         "sourceUrl": url,
         "totalChunks": len(chunks),
+        "modality": "text",
     }
     ids = [f"{file_id}:{i}" for i in range(len(chunks))]
     metadatas = [{**base_meta, "chunkIndex": i} for i in range(len(chunks))]
     try:
+        t = time.perf_counter()
         vectorstore.add_texts(ids=ids, texts=chunks, metadatas=metadatas, embeddings=vectors)
+        logger.info(
+            "vector write ok",
+            extra=merge_extra(
+                stage="ingest_text",
+                event="vector_write_ok",
+                file_id=file_id,
+                count=len(ids),
+                duration_ms=round((time.perf_counter() - t) * 1000, 2),
+            ),
+        )
     except Exception as e:
-        logger.error("vector store write failed file_id=%s: %s", file_id, e)
+        logger.exception(
+            "vector store write failed",
+            extra=merge_extra(stage="ingest_text", event="vector_write_error", file_id=file_id),
+        )
         return IngestResult(False, file_id, error=f"Vector store failed: {e}")
     return IngestResult(True, file_id, chunks=len(chunks))
 
@@ -241,9 +404,23 @@ async def _ingest_image(
     vectorstore: Any,
 ) -> IngestResult:
     try:
+        t = time.perf_counter()
         vectors = await asyncio.to_thread(compute_image_embeddings, [data])
+        logger.info(
+            "image embedding ok",
+            extra=merge_extra(
+                stage="ingest_image",
+                event="embed_ok",
+                file_id=file_id,
+                dim=len(vectors[0]) if vectors else 0,
+                duration_ms=round((time.perf_counter() - t) * 1000, 2),
+            ),
+        )
     except Exception as e:
-        logger.error("image embedding failed file_id=%s: %s", file_id, e)
+        logger.exception(
+            "image embedding failed",
+            extra=merge_extra(stage="ingest_image", event="embed_error", file_id=file_id),
+        )
         return IngestResult(False, file_id, error=f"Image embedding failed: {e}")
 
     metadata = {
@@ -253,11 +430,26 @@ async def _ingest_image(
         "sourceUrl": url,
         "chunkIndex": 0,
         "totalChunks": 1,
+        "modality": "image",
     }
     try:
+        t = time.perf_counter()
         vectorstore.add_texts(ids=[file_id], texts=[file_name or ""], metadatas=[metadata], embeddings=vectors)
+        logger.info(
+            "vector write ok",
+            extra=merge_extra(
+                stage="ingest_image",
+                event="vector_write_ok",
+                file_id=file_id,
+                count=1,
+                duration_ms=round((time.perf_counter() - t) * 1000, 2),
+            ),
+        )
     except Exception as e:
-        logger.error("vector store write failed file_id=%s: %s", file_id, e)
+        logger.exception(
+            "vector store write failed",
+            extra=merge_extra(stage="ingest_image", event="vector_write_error", file_id=file_id),
+        )
         return IngestResult(False, file_id, error=f"Vector store failed: {e}")
     return IngestResult(True, file_id, chunks=1)
 
