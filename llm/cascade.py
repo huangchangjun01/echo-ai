@@ -1,13 +1,13 @@
-"""流式级联：小模型快速前缀 + 大模型深度续写。
+"""流式级联：小模型快速前缀 + 大模型实时续写。
 
-设计目标：用户感知到的首字延迟尽可能短（< 200ms），同时拥有大模型的深度续写质量。
+设计目标：用户感知到的首字延迟尽可能短，同时拥有大模型的深度续写质量。
 
-实现策略（实际可行方案）：
-- 小模型：用于快速产出"前缀"，让用户在第一时间看到回答的开头。
-- 大模型：完整生成完整回复（含前缀内容）。我们尝试在重叠前缀的位置之后才开始 yield delta。
-- 任何无法去重的情况（如两个模型输出完全不同的开场），cascade 选择保留小模型输出 + 大模型整体输出（用户能看到两段）。
-
-用户可见的最终文本 = max overlap removed 大模型输出 + 之前的小模型前缀（如果未被大模型覆盖）。
+实现策略：
+- 小模型：快速产出"前缀"，先 yield 给用户，占住首屏。
+- 大模型：以「续写」语义接着前缀往下写，**逐 chunk 实时 yield**（不再先缓冲整段再切片）。
+- 前缀一旦 yield 出去就不可撤回，因此最终文本恒等于 ``prefix + 大模型续写尾``，
+  绝不丢弃已展示的前缀。大模型若无视指令把开头又抄了一遍，用门控去重跳过重复段。
+- ``<think>...</think>`` 推理块在续写流里增量剥离：think 未闭合时按住不吐，闭合后再吐后续。
 """
 
 from __future__ import annotations
@@ -33,38 +33,40 @@ def _strip_think(text: str) -> str:
     return _THINK_RE.sub("", text).strip()
 
 
-def _find_overlap(prefix: str, full: str, min_chars: int = 8) -> int:
-    """返回 `full` 中与 `prefix` 末尾重叠的最长前缀长度（字符级）。
+def _has_open_think(text: str) -> bool:
+    """是否存在尚未闭合的 <think>（此时 cleaned 里会残留原文，需按住不吐）。"""
+    return text.count("<think>") > text.count("</think>")
 
-    启发式：
-    1. 整段匹配：prefix 是否作为 substring 出现在 full 中 → 命中后 split 即可。
-    2. 后缀匹配：prefix 的后 K 字符是否等于 full 的前 K 字符（K>=min_chars）。
-    """
-    if not prefix or not full:
-        return 0
-    p = prefix.strip()
-    if p and p in full:
-        # prefix 完整出现在 full 中：返回 prefix 长度
-        return len(p)
-    # 字符级最大后缀前缀匹配
-    limit = min(len(p), len(full))
-    for k in range(limit, min_chars - 1, -1):
-        if p[-k:] == full[:k]:
-            return k
-    return 0
+
+def _common_prefix_len(a: str, b: str) -> int:
+    """a、b 从头逐字符相同的长度。"""
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+# 续写提示：告诉大模型"回复已经以 prefix 开头，请无缝续写、不要重复开头"。
+_CONTINUE_HINT = (
+    "你的回复已经以下面这段开头，请**直接接着往下写完整回复**，"
+    "不要重复这段开头、不要另起炉灶、不要加引号或解释：\n「{prefix}」"
+)
 
 
 async def cascade_chat(
     messages: list[dict[str, str]],
     *,
     prefix_tokens: int = 64,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """流式级联生成。
+    """流式级联生成：小模型前缀 + 大模型实时续写。
 
     yield 事件类型：
-    - {"type": "prefix", "text": str}
-    - {"type": "delta", "text": str}
-    - {"type": "done", "full": str}
+    - {"type": "prefix", "text": str}   小模型前缀（首屏）
+    - {"type": "delta", "text": str}    大模型续写增量（实时）
+    - {"type": "done", "full": str}     最终完整文本 = prefix + 续写尾
     """
     client = get_llm_client()
     t0 = time.perf_counter()
@@ -78,7 +80,7 @@ async def cascade_chat(
         ),
     )
 
-    # Step 1: 小模型快速前缀（给用户首屏）
+    # Step 1: 小模型快速前缀（首屏）
     t_prefix = time.perf_counter()
     prefix_raw = await client.small_prefix(messages, max_tokens=prefix_tokens)
     prefix = _strip_think(prefix_raw)
@@ -94,62 +96,79 @@ async def cascade_chat(
         ),
     )
 
-    # Step 2: 大模型完整生成（流式）
-    cascaded_messages = list(messages)
+    # Step 2: 大模型以「续写」语义接着 prefix 实时流式写下去
+    cascaded = list(messages)
     if prefix:
-        cascaded_messages = cascaded_messages + [{"role": "assistant", "content": prefix}]
+        cascaded = cascaded + [
+            {"role": "assistant", "content": prefix},
+            {"role": "system", "content": _CONTINUE_HINT.format(prefix=prefix)},
+        ]
 
-    # 我们让大模型自由生成完整回复（不去强制它从 prefix 续写）。
-    # 收集完整大模型输出后做 overlap 检测，去掉 prefix 部分。
     t_big = time.perf_counter()
-    full_chunks: list[str] = []
-    async for delta in client.stream(cascaded_messages):
-        full_chunks.append(delta)
-    big_full = "".join(full_chunks)
-    big_clean = _strip_think(big_full)
+    raw = ""            # 大模型原始累积（可能含 <think>）
+    skip: int | None = None   # cleaned 开头需跳过的重复前缀字符数（None=未定）
+    emitted = 0         # 已 yield 的 cleaned[skip:] 字符数
+    tail_parts: list[str] = []
+    delta_count = 0
+    first_delta_ms: float | None = None
+
+    async for chunk in client.stream(cascaded, temperature=temperature, max_tokens=max_tokens):
+        raw += chunk
+        if _has_open_think(raw):
+            continue
+        cleaned = _strip_think(raw)
+        if not cleaned:
+            continue
+
+        # 门控去重：判断大模型是否把 prefix 开头又抄了一遍
+        if skip is None:
+            if prefix:
+                common = _common_prefix_len(prefix, cleaned)
+                # cleaned 目前与 prefix 完全一致且尚未超过 prefix 长度 → 可能仍在重抄，继续缓冲
+                if common == len(cleaned) and len(cleaned) < len(prefix):
+                    continue
+                skip = len(prefix) if cleaned.startswith(prefix) else 0
+            else:
+                skip = 0
+
+        usable = cleaned[skip:]
+        if len(usable) > emitted:
+            piece = usable[emitted:]
+            emitted = len(usable)
+            tail_parts.append(piece)
+            delta_count += 1
+            if first_delta_ms is None:
+                first_delta_ms = round((time.perf_counter() - t_big) * 1000, 2)
+            yield {"type": "delta", "text": piece}
+
+    # 流结束时若仍未定 skip（大模型只回了 prefix 或空），补一次决断 + flush
+    if skip is None:
+        cleaned = _strip_think(raw)
+        skip = len(prefix) if (prefix and cleaned.startswith(prefix)) else 0
+        usable = cleaned[skip:]
+        if len(usable) > emitted:
+            piece = usable[emitted:]
+            emitted = len(usable)
+            tail_parts.append(piece)
+            delta_count += 1
+            yield {"type": "delta", "text": piece}
+
+    final_text = prefix + "".join(tail_parts)
     big_ms = round((time.perf_counter() - t_big) * 1000, 2)
-
-    # 计算 overlap
-    overlap = _find_overlap(prefix, big_clean, min_chars=4)
-    if overlap > 0 and len(big_clean) > overlap:
-        tail = big_clean[overlap:]
-        final_text = prefix + tail
-        overlap_kind = "suffix_prefix_match"
-    elif overlap == 0 and big_clean.startswith(prefix):
-        tail = big_clean[len(prefix):]
-        final_text = prefix + tail
-        overlap_kind = "startswith"
-    else:
-        # 无可识别重叠：以大模型完整输出为准（更权威）。
-        tail = big_clean
-        final_text = big_clean
-        prefix = ""  # 前缀被覆盖，避免被外层拼接
-        overlap_kind = "none"
-
     logger.info(
-        "cascade overlap",
+        "cascade big model streamed",
         extra=merge_extra(
             stage="cascade",
-            event="overlap",
-            overlap_chars=overlap if overlap_kind != "startswith" else len(prefix),
-            overlap_kind=overlap_kind,
-            big_full_len=len(big_full),
-            big_clean_len=len(big_clean),
-            tail_len=len(tail),
+            event="stream",
             prefix_kept=bool(prefix),
+            skip_chars=skip or 0,
+            raw_len=len(raw),
+            tail_len=len("".join(tail_parts)),
+            delta_count=delta_count,
+            first_delta_ms=first_delta_ms,
             big_model_ms=big_ms,
         ),
     )
-
-    # Step 3: 增量 yield tail（保证流式体验）
-    chunk_size = 8
-    emitted = 0
-    delta_count = 0
-    while emitted < len(tail):
-        piece = tail[emitted : emitted + chunk_size]
-        emitted += len(piece)
-        delta_count += 1
-        yield {"type": "delta", "text": piece}
 
     yield {"type": "done", "full": final_text}
     logger.info(

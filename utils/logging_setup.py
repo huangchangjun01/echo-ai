@@ -39,9 +39,12 @@ class TextFormatter(logging.Formatter):
     """单行人类可读格式：``ts LEVEL logger [stage.event] [k=v ...] msg``。
 
     字段顺序：时间戳 → 等级 → logger 名 → 可选 stage.event 标签 →
-    ContextVar 自动注入字段 → 记录 extras（去重）→ 消息。
+    ContextVar 自动注入字段 → 记录 extras（去重）→ 消息 → 堆栈（多行缩进）。
 
     缺省字段不打印，避免噪音；带值的 ``extra`` 才会显示。
+
+    堆栈渲染：异常 traceback 紧随日志行，单独放在 ``--- traceback ---`` /
+    ``--- end ---`` 框架之间，确保一行搜索 ``error_type=`` 仍可定位所有错误。
     """
 
     _RESERVED = {
@@ -89,12 +92,17 @@ class TextFormatter(logging.Formatter):
             seen.add(key)
 
         msg = record.getMessage()
-        if record.exc_info:
-            msg = f"{msg}\n{self.formatException(record.exc_info)}"
+        prefix = f"{ts}  {level:<7} {logger_name} {tag}"
+        extras_str = " ".join(extras)
+        if extras_str:
+            head = f"{prefix} {extras_str}  \"{msg}\""
+        else:
+            head = f"{prefix} \"{msg}\""
 
-        if extras:
-            return f"{ts}  {level:<7} {logger_name} {tag} {' '.join(extras)}  \"{msg}\""
-        return f"{ts}  {level:<7} {logger_name} {tag} \"{msg}\""
+        if record.exc_info:
+            tb = self.formatException(record.exc_info)
+            return f"{head}\n--- traceback ---\n{tb}--- end ---"
+        return head
 
 
 def _short_repr(value: Any) -> str:

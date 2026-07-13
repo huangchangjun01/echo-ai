@@ -14,6 +14,7 @@ import asyncio
 import logging
 
 from tools.base import BaseTool, ToolResult, ok
+from utils.request_context import log_exception, log_silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,15 @@ async def _understand_image_async(image_url: str) -> ToolResult:
         vecs = await asyncio.to_thread(clip.embed_images, [data])
         embedding = vecs[0] if vecs else []
     except Exception as e:
-        logger.warning("image download/clip failed: %s", e)
+        log_exception(
+            logger,
+            "image download/clip failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="understand_image",
+            event="image_clip_error",
+            image_url=image_url,
+        )
 
     # 2) 用 LLM 描述图片（多模态时直接传 URL；否则使用检索增强）
     try:
@@ -76,9 +85,26 @@ async def _understand_image_async(image_url: str) -> ToolResult:
         resp = await client.chat(messages, max_tokens=200, temperature=0.4)
         try:
             description = resp["choices"][0]["message"]["content"].strip()
-        except Exception:
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "extract description from LLM response failed (use empty)",
+                exc=e,
+                stage="understand_image",
+                event="resp_extract_error",
+                image_url=image_url,
+            )
             description = ""
     except Exception as e:
-        logger.warning("LLM describe image failed: %s", e)
+        log_exception(
+            logger,
+            "LLM describe image failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="understand_image",
+            event="llm_describe_error",
+            image_url=image_url,
+            has_embedding=bool(embedding),
+        )
 
     return ok({"description": description, "embedding": embedding, "image_url": image_url})

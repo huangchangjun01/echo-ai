@@ -26,10 +26,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import sys
 import threading
 import time
 from contextvars import ContextVar, Token
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 # ContextVar 默认空 dict：getter 拿不到时返回 {}，避免 KeyError
 _request_ctx: ContextVar[dict[str, Any]] = ContextVar("echo_request_ctx", default={})
@@ -116,6 +119,126 @@ def log_event(
     logger.log(level, msg, extra=extra)
 
 
+_ERR_TEXT_LIMIT = 1000
+
+
+def _format_exc_details(exc: BaseException) -> dict[str, Any]:
+    """把异常对象的关键信息抽出来注入 extras，便于一行搜索定位。
+
+    返回：
+        error_type    - 异常类型名（用于 grep / 报警规则）
+        error_msg     - 异常字符串（截到 1000 字符以免吞字段）
+        error_module  - 抛出异常的模块路径
+        error_class   - 异常类的全限定名（"module.QualName"）
+    """
+    cls = type(exc)
+    module = getattr(cls, "__module__", "") or ""
+    qualname = getattr(cls, "__qualname__", "") or cls.__name__
+    err_text = str(exc) or repr(exc)
+    if len(err_text) > _ERR_TEXT_LIMIT:
+        err_text = err_text[: _ERR_TEXT_LIMIT - 3] + "..."
+    return {
+        "error_type": cls.__name__,
+        "error_msg": err_text,
+        "error_module": module,
+        "error_class": f"{module}.{qualname}" if module else qualname,
+    }
+
+
+def log_exception(
+    logger: logging.Logger,
+    msg: str,
+    *,
+    exc: BaseException | None = None,
+    level: int = logging.ERROR,
+    include_traceback: bool = True,
+    **fields: Any,
+) -> None:
+    """详细异常日志：自动注入 ``error_type`` / ``error_msg`` / ``error_module``
+    并附带完整 traceback。
+
+    用于替代散落的 ``logger.warning("xxx failed: %s", e)`` 写法，集中输出
+    异常类型、消息、模块、堆栈与调用方提供的业务上下文（``stage`` / ``user_id`` /
+    ``url`` / ``sql`` 等）。
+
+    设计原则（按用户要求）：
+    - **关键信息齐全**：除 traceback 外，还显式注入 ``error_type`` / ``error_msg``
+      / ``error_module`` / ``error_class``，便于在日志聚合平台按 ``error_type``
+      检索或报警；任何调用方传入的 ``**fields``（``url`` / ``sql`` / ``tool`` …
+      ）也会原样保留。
+    - **完整堆栈**：默认 ``include_traceback=True``；调用方如果不希望刷屏可显式
+      传 ``include_traceback=False``，但绝大多数"出错需要排查"场景都应保留堆栈。
+    - **活跃异常自动捕获**：没显式传 ``exc`` 时取 ``sys.exc_info()[1]``，因此
+      在 ``except Exception as e:`` 里直接 ``log_exception(logger, "...")``
+      也能拿到 traceback（依赖 ``logger.log(..., exc_info=...)`` 触发系统抓取）。
+
+    参数：
+        exc: 显式传入的异常；缺省时自动取 ``sys.exc_info()[1]``（必须是异常
+            活跃状态下调用，否则取到 ``None``）。
+        level: 日志级别，``logger.exception`` 仅 ERROR 级自带堆栈，其他级别
+            需要显式 ``exc_info=True``。
+        include_traceback: 是否附带 ``exc_info``；DEBUG 级以下通常关闭以免刷屏。
+        fields: 业务字段，全部走 ``merge_extra``，``None`` / 空字符串会被剔除。
+            调用方传入的字段名 **不要** 用 ``error_type`` / ``error_msg`` /
+            ``error_module`` / ``error_class`` —— 这四个字段由本函数独占注入。
+    """
+    fields = dict(fields)
+    if exc is not None:
+        for k, v in _format_exc_details(exc).items():
+            fields.setdefault(k, v)
+    if include_traceback:
+        logger.log(
+            level,
+            msg,
+            exc_info=exc is not None or sys.exc_info()[0] is not None,
+            extra=merge_extra(**fields),
+        )
+    else:
+        logger.log(level, msg, extra=merge_extra(**fields))
+
+
+def log_silent_failure(
+    logger: logging.Logger,
+    msg: str,
+    *,
+    exc: BaseException | None = None,
+    level: int = logging.DEBUG,
+    include_traceback: bool = False,
+    **fields: Any,
+) -> None:
+    """用于"必须 swallow 但仍要可观测"的路径，DEBUG 级记录，不污染 INFO。
+
+    适用场景：
+    - 关闭游标 / 关闭连接 / 释放资源等 cleanup 路径
+    - fallback 分支（chunk 切分 / 编码探测）失败不影响主流程
+    - SSE 流式 chunk 解析、JSON 抽取等"跳过这一段"的循环内吞异常
+
+    与 ``log_exception`` 的差异：不强制带 traceback，默认 DEBUG；想要 INFO
+    级提示时显式传 ``level=logging.INFO``。如果排查需要完整堆栈（很罕见），
+    可显式传 ``include_traceback=True``。
+    """
+    fields = dict(fields)
+    if exc is not None:
+        for k, v in _format_exc_details(exc).items():
+            if k == "error_msg":
+                # silent 路径里信息量小一些，error_msg 截到 200 字
+                err_text = v
+                if len(err_text) > 200:
+                    err_text = err_text[:197] + "..."
+                fields["error_msg"] = err_text
+            else:
+                fields.setdefault(k, v)
+    if include_traceback:
+        logger.log(
+            level,
+            msg,
+            exc_info=exc is not None or sys.exc_info()[0] is not None,
+            extra=merge_extra(**fields),
+        )
+    else:
+        logger.log(level, msg, extra=merge_extra(**fields))
+
+
 @contextlib.contextmanager
 def log_stage(
     logger: logging.Logger,
@@ -189,8 +312,14 @@ async def to_thread_with_ctx(func: Callable[..., Any], *args: Any, **kwargs: Any
         finally:
             try:
                 var.reset(token)
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "to_thread runner: thread context reset failed (token already consumed?)",
+                    exc=e,
+                    stage="to_thread_ctx",
+                    event="reset_error",
+                )
 
     return await loop.run_in_executor(None, _runner)
 
@@ -202,6 +331,8 @@ __all__ = [
     "current_context_in_thread",
     "merge_extra",
     "log_event",
+    "log_exception",
+    "log_silent_failure",
     "log_stage",
     "request_context_scope",
     "to_thread_with_ctx",

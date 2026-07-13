@@ -15,6 +15,7 @@ import logging
 from typing import Any
 
 from tools.base import BaseTool, ToolResult, ok
+from utils.request_context import log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,17 @@ async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolR
                     }
                 )
         except Exception as e:
-            logger.warning("EchoMemory search failed: %s", e)
+            log_exception(
+                logger,
+                "EchoMemory search failed",
+                exc=e,
+                level=logging.WARNING,
+                stage="search_memory",
+                event="memory_store_error",
+                user_id=user_id,
+                query_preview=query[:80],
+                top_k=top_k,
+            )
         return out
 
     async def _search_doc_store() -> list[dict[str, Any]]:
@@ -155,7 +166,17 @@ async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolR
                     }
                 )
         except Exception as e:
-            logger.warning("EchoDoc search failed: %s", e)
+            log_exception(
+                logger,
+                "EchoDoc search failed",
+                exc=e,
+                level=logging.WARNING,
+                stage="search_memory",
+                event="doc_store_error",
+                user_id=user_id,
+                query_preview=query[:80],
+                top_k=top_k,
+            )
         return out
 
     memory_hits, doc_hits = await asyncio.gather(_search_memory_store(), _search_doc_store())
@@ -195,7 +216,17 @@ async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolR
                 )
         causal = causal[: settings.l1_topk]
     except Exception as e:
-        logger.warning("causal chain fetch failed: %s", e)
+        log_exception(
+            logger,
+            "causal chain fetch failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="search_memory",
+            event="causal_error",
+            user_id=user_id,
+            memory_hits=len(memory_hits_only),
+            total_hits=len(hits),
+        )
 
     # 统计 modality 分布，便于上层观察
     modality_counts: dict[str, int] = {}

@@ -13,6 +13,7 @@ import logging
 from collections.abc import Sequence
 
 from config.config import get_settings
+from utils.request_context import log_exception, log_silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,16 @@ def _sample_keyframes(video_bytes: bytes, max_frames: int = 8) -> list[bytes]:
                 frames.append(buf.tobytes())
         return frames
     except Exception as e:
-        logger.warning("sample_keyframes failed: %s", e)
+        log_exception(
+            logger,
+            "sample_keyframes failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="video_mae",
+            event="sample_error",
+            bytes=len(video_bytes or b""),
+            max_frames=max_frames,
+        )
         return []
 
 
@@ -47,7 +57,15 @@ def np_frombuffer(data: bytes):
 
         arr = np.frombuffer(data, dtype=np.uint8)
         return cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    except Exception:
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "np_frombuffer: cv2 decode failed",
+            exc=e,
+            stage="video_mae",
+            event="decode_error",
+            bytes=len(data or b""),
+        )
         return None
 
 

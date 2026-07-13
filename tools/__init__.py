@@ -9,7 +9,7 @@ from .base import BaseTool, ToolResult, fail, ok
 from .search_memory import SearchMemoryTool
 from .understand_audio import UnderstandAudioTool
 from .understand_image import UnderstandImageTool
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -82,14 +82,15 @@ def dispatch(name: str, **kwargs) -> ToolResult:
         )
         return result
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "tool.dispatch failed",
-            extra=merge_extra(
-                stage=f"tool_{name}",
-                event="error",
-                error=str(e)[:300],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            level=logging.ERROR,
+            stage=f"tool_{name}",
+            event="error",
+            args_summary=json.dumps(kwargs, ensure_ascii=False, default=str)[:200],
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return fail(str(e))
 
@@ -127,14 +128,15 @@ async def adispatch(name: str, **kwargs) -> ToolResult:
         )
         return result
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "tool.adispatch failed",
-            extra=merge_extra(
-                stage=f"tool_{name}",
-                event="error",
-                error=str(e)[:300],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            level=logging.ERROR,
+            stage=f"tool_{name}",
+            event="error",
+            args_summary=json.dumps(kwargs, ensure_ascii=False, default=str)[:200],
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return fail(str(e))
 

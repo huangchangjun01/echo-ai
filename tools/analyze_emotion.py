@@ -13,6 +13,7 @@ import logging
 import re
 
 from tools.base import BaseTool, ToolResult, ok
+from utils.request_context import log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,17 @@ async def _analyze_emotion_async(*, text: str, user_id: str) -> ToolResult:
             await _persist_emotion(user_id, text, emo, intensity, reason)
             return ok({"emotion": emo, "intensity": intensity, "reason": reason})
     except Exception as e:
-        logger.warning("LLM emotion failed, fallback rule: %s", e)
+        log_exception(
+            logger,
+            "LLM emotion failed, fallback rule",
+            exc=e,
+            level=logging.WARNING,
+            stage="analyze_emotion",
+            event="llm_error",
+            user_id=user_id,
+            text_preview=(text or "")[:80],
+            text_len=len(text or ""),
+        )
 
     # 回退：规则
     obj = _rule_based(text)
@@ -110,4 +121,14 @@ async def _persist_emotion(user_id: str, text: str, emotion: str, intensity: flo
             (user_id, text[:1000], emotion, float(intensity), (reason or "")[:255]),
         )
     except Exception as e:
-        logger.warning("persist emotion log failed: %s", e)
+        log_exception(
+            logger,
+            "persist emotion log failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="analyze_emotion",
+            event="persist_error",
+            user_id=user_id,
+            emotion=emotion,
+            intensity=intensity,
+        )

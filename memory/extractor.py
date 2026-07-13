@@ -22,9 +22,64 @@ import uuid
 from typing import Any
 
 from config.config import get_settings
-from utils.request_context import log_stage, merge_extra
+from llm.cascade import _strip_think
+from utils.request_context import log_exception, log_silent_failure, log_stage, merge_extra
 
 logger = logging.getLogger(__name__)
+
+
+# ---------- JSON 修复兜底 ----------
+
+# 字符串值内出现裸 " 是 LLM 生成 JSON 时最常见的坏 JSON 形态。Prompt 已要求用中文引号，
+# 但模型仍偶发不遵守；这里用状态机扫描 + look-ahead 判定"闭合引号 vs 嵌入引号"做一次就地修复，
+# 让单条坏 JSON 不至于让整段对话的记忆全部丢失。
+_STRING_END_LOOKAHEAD = set(",}]:")
+_WS = set(" \t\r\n")
+
+
+def _repair_json(text: str) -> str:
+    """对 LLM 输出的 JSON 做就地修复。
+
+    规则：按字符扫描；进入字符串后，遇到 " 时向后跳过空白，若下一个非空白字符是
+    , } ] : 或 EOF 则视为闭合引号原样保留；否则视为嵌入引号转义为 \\"。
+    转义反斜杠与已存在的合法转义序列保持原样。
+    """
+    out: list[str] = []
+    in_string = False
+    escape_next = False
+    n = len(text)
+    i = 0
+    while i < n:
+        ch = text[i]
+        if escape_next:
+            out.append(ch)
+            escape_next = False
+            i += 1
+            continue
+        if ch == "\\":
+            out.append(ch)
+            escape_next = True
+            i += 1
+            continue
+        if ch == '"':
+            if not in_string:
+                out.append(ch)
+                in_string = True
+                i += 1
+                continue
+            j = i + 1
+            while j < n and text[j] in _WS:
+                j += 1
+            if j >= n or text[j] in _STRING_END_LOOKAHEAD:
+                out.append(ch)
+                in_string = False
+            else:
+                out.append('\\"')
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 # ---------- LLM 抽取 ----------
@@ -46,7 +101,11 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
             temperature=0.2,
         )
         content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-        m = re.search(r"\[[\s\S]*\]", content or "")
+        # 推理型模型（MiniMax-M3）输出会在 JSON 答案前先吐 <think>...</think> 块；
+        # 若不剥掉，思考块里夹带的方括号（如示例编号）会让贪婪正则把思考块连同 JSON
+        # 一起吞掉，导致 json.loads 解析失败。这里先剥思考块再匹配 JSON。
+        cleaned = _strip_think(content or "")
+        m = re.search(r"\[[\s\S]*?\]", cleaned)
         if not m:
             logger.info(
                 "llm_extract empty list",
@@ -54,11 +113,47 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
                     stage="llm_extract",
                     event="empty",
                     raw_preview=(content or "")[:120],
+                    cleaned_preview=(cleaned or "")[:120],
                     duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                 ),
             )
             return []
-        items = json.loads(m.group(0))
+        try:
+            items = json.loads(m.group(0))
+        except json.JSONDecodeError as e:
+            # 解析失败：先尝试状态机式修复（裸双引号场景），修复后再解析一次。
+            # 修复成功则走主流程，避免整段对话记忆全丢；修复仍失败再记录 + 返回空。
+            raw_span = m.group(0) if m else ""
+            repaired = _repair_json(raw_span)
+            try:
+                items = json.loads(repaired)
+                logger.info(
+                    "llm_extract json repaired",
+                    extra=merge_extra(
+                        stage="llm_extract",
+                        event="repaired",
+                        user_msg_len=len(user_msg or ""),
+                        assistant_msg_len=len(assistant_msg or ""),
+                        duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                    ),
+                )
+            except json.JSONDecodeError as e2:
+                # 解析失败：日志带上 cleaned 片段，便于定位 prompt / 模型问题。
+                log_exception(
+                    logger,
+                    "LLM extract JSON parse failed",
+                    exc=e2,
+                    level=logging.WARNING,
+                    stage="llm_extract",
+                    event="parse_error",
+                    user_msg_len=len(user_msg or ""),
+                    assistant_msg_len=len(assistant_msg or ""),
+                    raw_preview=(content or "")[:200],
+                    cleaned_preview=(cleaned or "")[:200],
+                    matched_preview=(m.group(0) if m else "")[:200],
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                )
+                return []
         if not isinstance(items, list):
             return []
         out = []
@@ -90,14 +185,16 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
         )
         return out
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "LLM extract failed",
-            extra=merge_extra(
-                stage="llm_extract",
-                event="error",
-                error=str(e)[:200],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="llm_extract",
+            event="error",
+            user_msg_len=len(user_msg or ""),
+            assistant_msg_len=len(assistant_msg or ""),
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return []
 
@@ -155,16 +252,16 @@ async def _vectorize_and_store(
         )
         return ids
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "vectorize_and_store failed",
-            extra=merge_extra(
-                stage="vectorize_and_store",
-                event="error",
-                user_id=user_id,
-                count=len(facts),
-                error=str(e)[:200],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="vectorize_and_store",
+            event="error",
+            user_id=user_id,
+            count=len(facts),
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return []
 
@@ -216,9 +313,47 @@ async def _dedup_one(user_id: str, fact: str, vector: list[float], threshold: fl
                 temperature=0.1,
             )
             content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-            m = re.search(r"\{[\s\S]*\}", content or "")
+            # 推理型模型会先吐 <think> 块；不剥掉会导致贪婪正则吞掉思考块后 JSON
+            # 解析失败，与 _llm_extract 中的处理一致。
+            cleaned = _strip_think(content or "")
+            m = re.search(r"\{[\s\S]*?\}", cleaned)
+            obj: dict | None = None
             if m:
-                obj = json.loads(m.group(0))
+                try:
+                    parsed = json.loads(m.group(0))
+                    if isinstance(parsed, dict):
+                        obj = parsed
+                except json.JSONDecodeError as e:
+                    # 兜底：尝试用状态机修复裸引号。
+                    repaired = _repair_json(m.group(0))
+                    try:
+                        parsed = json.loads(repaired)
+                        if isinstance(parsed, dict):
+                            obj = parsed
+                            logger.info(
+                                "dedup json repaired",
+                                extra=merge_extra(
+                                    stage="dedup_one",
+                                    event="repaired",
+                                    user_id=user_id,
+                                    top_sim=round(top_sim, 4),
+                                ),
+                            )
+                    except json.JSONDecodeError as e2:
+                        log_exception(
+                            logger,
+                            "dedup JSON parse failed, fallback heuristic",
+                            exc=e2,
+                            level=logging.WARNING,
+                            stage="dedup_one",
+                            event="parse_error",
+                            user_id=user_id,
+                            top_sim=round(top_sim, 4),
+                            threshold=threshold,
+                            raw_preview=(content or "")[:200],
+                            cleaned_preview=(cleaned or "")[:200],
+                        )
+            if obj is not None:
                 decision = {
                     "duplicate": bool(obj.get("duplicate", False)),
                     "merged": obj.get("merged", fact if not obj.get("duplicate") else docs[0]),
@@ -239,13 +374,16 @@ async def _dedup_one(user_id: str, fact: str, vector: list[float], threshold: fl
                 )
                 return decision
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "LLM dedup failed, fallback heuristic",
-                extra=merge_extra(
-                    stage="dedup_one",
-                    event="llm_error",
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="dedup_one",
+                event="llm_error",
+                user_id=user_id,
+                top_sim=round(top_sim, 4) if 'top_sim' in locals() else None,
+                threshold=threshold,
             )
         # 启发式：top_sim 高即视作重复
         decision = {
@@ -267,14 +405,15 @@ async def _dedup_one(user_id: str, fact: str, vector: list[float], threshold: fl
         )
         return decision
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "dedup_one failed",
-            extra=merge_extra(
-                stage="dedup_one",
-                event="error",
-                user_id=user_id,
-                error=str(e)[:200],
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="dedup_one",
+            event="error",
+            user_id=user_id,
+            fact_preview=fact[:80],
         )
         return {"duplicate": False, "merged": fact, "relation": ""}
 
@@ -320,14 +459,16 @@ async def _summarize(user_id: str, contents: list[str]) -> str:
         )
         return text
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "summarize failed",
-            extra=merge_extra(
-                stage="summarize",
-                event="error",
-                user_id=user_id,
-                error=str(e)[:200],
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="summarize",
+            event="error",
+            user_id=user_id,
+            input_count=len(contents),
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2) if 't0' in locals() else None,
         )
         return ""
 
@@ -335,6 +476,32 @@ async def _summarize(user_id: str, contents: list[str]) -> str:
 # ---------- MySQL 归档 ----------
 
 _VALID_LEVELS = {"L0", "L1", "L2"}
+
+# memory_relations 存在多种历史 schema：新表用 relation/weight，旧表用 relation_type/confidence，
+# 迁移后的表可能两套都在。缓存一次实际列名，据此拼 INSERT，避免盲试触发 1054/1364 错误。
+_REL_COLUMNS: set[str] | None = None
+
+
+async def _memory_relations_columns() -> set[str]:
+    """探测并缓存 memory_relations 的实际列名（进程内单次）。"""
+    global _REL_COLUMNS
+    if _REL_COLUMNS is not None:
+        return _REL_COLUMNS
+    from database import fetch_all
+
+    try:
+        rows = await fetch_all("SHOW COLUMNS FROM memory_relations")
+        _REL_COLUMNS = {str(r.get("Field")) for r in rows if r.get("Field")}
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "probe memory_relations columns failed; assume current schema",
+            exc=e,
+            stage="archive",
+            event="rel_cols_probe_error",
+        )
+        _REL_COLUMNS = {"user_id", "source_id", "target_id", "relation", "weight"}
+    return _REL_COLUMNS
 
 
 async def _archive(
@@ -371,14 +538,15 @@ async def _archive(
                 ),
             )
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "archive summary failed",
-                extra=merge_extra(
-                    stage="archive",
-                    event="summary_error",
-                    user_id=user_id,
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="archive",
+                event="summary_error",
+                user_id=user_id,
+                summary_len=len(summary) if 'summary' in locals() else None,
             )
 
     # 2) 写每条 L0/L1
@@ -420,15 +588,16 @@ async def _archive(
             if new_id:
                 inserted.append(new_id)
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "archive item failed",
-                extra=merge_extra(
-                    stage="archive",
-                    event="item_error",
-                    user_id=user_id,
-                    level=level,
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="archive",
+                event="item_error",
+                user_id=user_id,
+                memory_level=level,
+                item_index=i if 'i' in locals() else None,
             )
 
     # 3) 关系表（兼容旧表：用 relation_type / confidence）
@@ -451,34 +620,40 @@ async def _archive(
             )
             if row:
                 source_id = int(row["id"])
-                try:
-                    await execute(
-                        """
-                        INSERT INTO memory_relations
-                            (user_id, source_id, target_id, relation_type, confidence)
-                        VALUES (%s, %s, %s, %s, %s)
-                        """,
-                        (user_id, source_id, target_id, rel, 1.0),
-                    )
-                except Exception:
-                    await execute(
-                        """
-                        INSERT INTO memory_relations
-                            (user_id, source_id, target_id, relation, weight)
-                        VALUES (%s, %s, %s, %s, %s)
-                        """,
-                        (user_id, source_id, target_id, rel, 1.0),
-                    )
+                # 按实际存在的列拼 INSERT：新表 relation/weight，旧表 relation_type/confidence，
+                # 两套并存时全部写入以满足各自的 NOT NULL 约束。
+                cols = await _memory_relations_columns()
+                fields = ["user_id", "source_id", "target_id"]
+                values: list[Any] = [user_id, source_id, target_id]
+                if "relation" in cols:
+                    fields.append("relation")
+                    values.append(rel)
+                if "relation_type" in cols:
+                    fields.append("relation_type")
+                    values.append(rel)
+                if "weight" in cols:
+                    fields.append("weight")
+                    values.append(1.0)
+                if "confidence" in cols:
+                    fields.append("confidence")
+                    values.append(1.0)
+                placeholders = ", ".join(["%s"] * len(values))
+                await execute(
+                    f"INSERT INTO memory_relations ({', '.join(fields)}) "
+                    f"VALUES ({placeholders})",
+                    tuple(values),
+                )
                 relations_inserted += 1
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "insert relation failed",
-                extra=merge_extra(
-                    stage="archive",
-                    event="relation_error",
-                    user_id=user_id,
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="archive",
+                event="relation_error",
+                user_id=user_id,
+                relation=rel if 'rel' in locals() else None,
             )
 
     logger.info(
@@ -641,13 +816,15 @@ async def extract_and_archive_async(
         row = await fetch_one("SELECT LAST_INSERT_ID() AS id")
         log_id = int(row["id"]) if row else None
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "create extract log failed",
-            extra=merge_extra(
-                stage="extract_and_archive_async",
-                event="log_create_error",
-                error=str(e)[:200],
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="extract_and_archive_async",
+            event="log_create_error",
+            user_id=user_id,
+            session_id=session_id,
         )
 
     try:
@@ -664,8 +841,16 @@ async def extract_and_archive_async(
                     """,
                     (log_id,),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "update extract log to success failed",
+                    exc=e,
+                    stage="extract_and_archive_async",
+                    event="status_update_error",
+                    log_id=log_id,
+                    target_status="success",
+                )
         logger.info(
             "memory extract done",
             extra=merge_extra(
@@ -678,15 +863,20 @@ async def extract_and_archive_async(
             ),
         )
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "memory extract failed",
-            extra=merge_extra(
-                stage="extract_and_archive_async",
-                event="error",
-                user_id=user_id,
-                error=str(e)[:300],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            level=logging.ERROR,
+            include_traceback=True,
+            stage="extract_and_archive_async",
+            event="error",
+            user_id=user_id,
+            session_id=session_id,
+            user_msg_len=len(user_msg or ""),
+            assistant_msg_len=len(assistant_msg or ""),
+            log_id=log_id,
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         if log_id is not None:
             try:
@@ -700,5 +890,14 @@ async def extract_and_archive_async(
                     """,
                     (str(e)[:500], log_id),
                 )
-            except Exception:
-                pass
+            except Exception as nested_e:
+                log_silent_failure(
+                    logger,
+                    "update extract log to failed failed",
+                    exc=nested_e,
+                    stage="extract_and_archive_async",
+                    event="status_update_error",
+                    log_id=log_id,
+                    target_status="failed",
+                    root_error=str(e)[:200],
+                )

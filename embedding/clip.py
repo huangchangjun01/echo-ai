@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +35,17 @@ def embed_images(images: Sequence[bytes | Any]) -> list[list[float]]:
         )
         return out
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "clip.embed_images fallback (zero vectors)",
-            extra=merge_extra(
-                stage="clip_embed_images",
-                event="fallback",
-                count=len(images),
-                dim=cfg.dim,
-                error=str(e)[:200],
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="clip_embed_images",
+            event="fallback",
+            count=len(images),
+            dim=cfg.dim,
+            model=cfg.model_name,
+            device=resolved,
         )
         return [[0.0] * cfg.dim for _ in images]
 

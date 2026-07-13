@@ -19,9 +19,48 @@ from llm.intent import Intent, classify_intent
 from memory import build_chat_context, extract_and_archive_async
 from memory.retriever import causal_chain, load_persona
 from tools import adispatch as dispatch_tool
-from utils.request_context import log_stage, merge_extra
+from utils.request_context import log_exception, log_silent_failure, log_stage, merge_extra
 
 logger = logging.getLogger(__name__)
+
+
+# ---------- 意图 → 工具偏好提示 ----------
+#
+# 设计意图：每次 chat 入口的「意图分类」已经识别出用户想要哪一种能力，下面这张表把
+# 意图翻译成一段「system 级 hint」，与 L1 hint 一起注入到 ReAct seed，让 LLM 在决策
+# 时知道「优先用哪一把工具」，避免每次都从 4 把工具里自由试错。
+#
+# 注意：本提示不是「hard dispatch」——LLM 仍拥有 ReAct 主控权；判断「不需要任何工具」
+# 也属于合法决策。这里只是把意图的偏好提前告知 LLM，让它在第一次决策时就能命中。
+#
+# 同 l1_hint：chat 意图不注入工具提示（LLM 默认就该走纯聊天路径，注入反而干扰）。
+_INTENT_TOOL_HINT: dict[Intent, str] = {
+    Intent.RECALL: (
+        "【意图偏好】用户希望『回忆 / 翻历史』。"
+        "请优先调用 search_memory 检索 EchoMemory + EchoDoc 中保存的相关记忆，"
+        "拿到命中后再用自然语言整理。不要调用 understand_image / understand_audio。"
+    ),
+    Intent.TEXT_SEARCH: (
+        "【意图偏好】用户希望『按文搜文』。"
+        "请优先调用 search_memory（文本向量检索路径），命中后整合成回答；"
+        "若命中附带可下载的图片/视频 URL，可视情况再调用 understand_image 复述内容。"
+    ),
+    Intent.DOC_SEARCH: (
+        "【意图偏好】用户希望『按主题找文件 / 合同 / 资料』。"
+        "请优先调用 search_memory（重点走 EchoDoc 文档集合）；"
+        "若需要再次确认图片/截图内容，再调用 understand_image。"
+    ),
+    Intent.IMAGE_SEARCH: (
+        "【意图偏好】用户希望『找一张图 / 看一张图 / 上传图片分析』。"
+        "若本轮附带图片数据，优先调用 understand_image 看图说话；"
+        "若是『回忆某张历史图』（如『上次那只猫』），先调 search_memory 找出命中，"
+        "再视情况对命中的图片 URL 调 understand_image 复述。"
+    ),
+    Intent.CHAT: (
+        "【意图偏好】本轮是纯聊天 / 寒暄。"
+        "如无强需求，直接自然语言回复即可，不必调用工具。"
+    ),
+}
 
 
 # ---------- 资源提取：把命中里的可下载 URL 抽成前端可渲染的 resource 事件 ----------
@@ -86,19 +125,26 @@ def _clean_filename(name: str) -> str:
 
 
 def _normalize_url(url: str) -> str:
-    """去掉 sourceUrl 的 http(s) 前缀。
+    """规范化 sourceUrl：剥离多余的 scheme 前缀后，按需补回 ``https://``。
 
-    上下文：data 里的 sourceUrl 可能是裸域名（如 ``cdn.example.com/foo.jpg``），
-    也可能带 https。前端要求不带 scheme —— 由前端根据运行环境自行拼接。
+    上下文：data 里的 sourceUrl 形态多样：
+    - ``https://cdn.example.com/foo.jpg`` / ``http://...`` → 保留 https
+    - ``//cdn.example.com/foo.jpg`` → 补 https
+    - ``cdn.example.com/foo.jpg``（裸域名，Qiniu 存储常用形态）→ 补 https
+    前端可直接用返回值做 ``<img src>`` / 下载，不再需要自行拼接 scheme。
     """
     if not url:
         return ""
     s = url.strip()
-    for prefix in ("https://", "http://", "//"):
+    if not s:
+        return ""
+    for prefix in ("https://", "http://"):
         if s.lower().startswith(prefix):
             s = s[len(prefix):]
             break
-    return s
+    if s.startswith("//"):
+        s = s[2:]
+    return f"https://{s}"
 
 
 # 把一段文本里所有形如 ``https://...`` / ``http://...`` 的 URL 去掉 scheme 前缀。
@@ -264,31 +310,33 @@ def _tool_result_to_text(name: str, result: dict) -> str:
 
 # ---------- ReAct 主循环 ----------
 
-async def _react_loop(
+async def _resolve_tools(
     user_id: str,
     session_id: str,
     messages: list[dict[str, str]],
     max_iter: int,
-) -> tuple[str, list[dict[str, Any]]]:
-    """执行 ReAct 循环：每次让 LLM 决定是否调用工具，循环直到回复或耗尽迭代。
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """ReAct 工具解析：逐轮让 LLM 决定是否调用工具并执行，直到 LLM 不再要求工具或迭代耗尽。
 
-    返回 (final_assistant_text, tool_call_log)
+    **不生成最终自然语言回复**——最终回复由 chat_stream 通过 cascade 流式产出。
+
+    返回 (tool_log, tool_turns)。tool_turns 是可追加进「最终生成上下文」的对话轮次
+    （形如 assistant「[calling tool: x]」+ user「工具结果」），让最终生成看到工具产出。
     """
     client = get_llm_client()
     tool_log: list[dict[str, Any]] = []
-    final_text = ""
-    decided_final = False
+    tool_turns: list[dict[str, str]] = []
     exhausted = False
 
     for i in range(max(1, max_iter)):
-        # 让 LLM 判断是否需要调用工具
-        decision_messages = list(messages) + [
+        # 让 LLM 判断是否需要调用工具；不需要时随口回一句即可（真正回答稍后单独生成）
+        decision_messages = list(messages) + tool_turns + [
             {
                 "role": "system",
                 "content": (
                     "如果你需要调用工具，**只**输出严格的 JSON："
                     '{"tool": "<name>", "args": {...}}。'
-                    "如果你认为信息已经足够，输出自然语言回复。"
+                    '如果不需要任何工具，只回复 "OK" 即可（真正的回答会另行生成）。'
                 ),
             }
         ]
@@ -300,9 +348,16 @@ async def _react_loop(
             # 剥离思考块，避免影响 tool_call 解析
             text = _strip_think(raw_text)
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "react decision failed",
-                extra=merge_extra(stage="react_decision", event="error", iter=i, error=str(e)[:200]),
+                exc=e,
+                level=logging.WARNING,
+                stage="react_decision",
+                event="error",
+                iter=i,
+                msg_count=len(messages),
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             text = ""
         decision_ms = round((time.perf_counter() - t0) * 1000, 2)
@@ -321,11 +376,9 @@ async def _react_loop(
 
         call = parse_tool_call(text)
         if not call:
-            final_text = text
-            decided_final = True
             logger.info(
-                "react final (no tool call)",
-                extra=merge_extra(stage="react_loop", event="final", iter=i, out_len=len(text)),
+                "react no tool call (hand off to cascade)",
+                extra=merge_extra(stage="react_loop", event="no_tool", iter=i, out_len=len(text)),
             )
             break
 
@@ -351,16 +404,16 @@ async def _react_loop(
             result = await dispatch_tool(name, **args)
         except Exception as e:
             tool_ms = round((time.perf_counter() - t1) * 1000, 2)
-            logger.exception(
+            log_exception(
+                logger,
                 "react tool dispatch failed",
-                extra=merge_extra(
-                    stage="react_loop",
-                    event="tool_error",
-                    iter=i,
-                    tool=name,
-                    duration_ms=tool_ms,
-                    error=str(e)[:300],
-                ),
+                exc=e,
+                stage="react_loop",
+                event="tool_error",
+                iter=i,
+                tool=name,
+                args_summary=json.dumps(args, ensure_ascii=False)[:200],
+                duration_ms=tool_ms,
             )
             break
         tool_ms = round((time.perf_counter() - t1) * 1000, 2)
@@ -378,45 +431,13 @@ async def _react_loop(
         )
         tool_log.append({"iter": i, "tool": name, "args": args, "result": result.to_dict()})
 
-        # 把工具结果追加进 messages，让 LLM 下一轮看到
+        # 把工具结果追加进 tool_turns，让 LLM 下一轮决策 + 最终生成都能看到
         result_text = _tool_result_to_text(name, result.to_dict())
-        messages.append({"role": "assistant", "content": f"[calling tool: {name}]"})
-        messages.append({"role": "user", "content": result_text})
+        tool_turns.append({"role": "assistant", "content": f"[calling tool: {name}]"})
+        tool_turns.append({"role": "user", "content": result_text})
     else:
         exhausted = True
 
-    if exhausted and not decided_final:
-        # 迭代耗尽也没拿到自然语言回复：让 LLM 直接总结
-        t2 = time.perf_counter()
-        try:
-            resp = await client.chat(messages, max_tokens=600, temperature=0.4)
-            final_text = resp.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
-            logger.info(
-                "react exhausted → summary",
-                extra=merge_extra(
-                    stage="react_loop",
-                    event="summary",
-                    iter=max_iter - 1,
-                    out_len=len(final_text),
-                    duration_ms=round((time.perf_counter() - t2) * 1000, 2),
-                ),
-            )
-        except Exception as e:
-            logger.exception(
-                "react summary failed",
-                extra=merge_extra(
-                    stage="react_loop",
-                    event="summary_error",
-                    error=str(e)[:200],
-                ),
-            )
-            final_text = ""
-        logger.info(
-            "react exhausted",
-            extra=merge_extra(stage="react_loop", event="exhausted", max_iter=max_iter),
-        )
-
-    final_text = _strip_think(final_text)
     logger.info(
         "react loop end",
         extra=merge_extra(
@@ -424,10 +445,9 @@ async def _react_loop(
             event="end",
             tools_called=len(tool_log),
             exhausted=exhausted,
-            final_len=len(final_text),
         ),
     )
-    return final_text, tool_log
+    return tool_log, tool_turns
 
 
 # ---------- 公开接口 ----------
@@ -519,35 +539,47 @@ async def chat_stream(
 
     final_text = ""
 
-    # 始终走 ReAct 循环；仅在非 chat 意图下注入 L1 hint（chat 类无 RAG 上下文，
-    # 注入反而误导 LLM）。
+    # 工具决策 seed：仅在非 chat 意图下注入 L1 hint + 工具偏好（chat 类无 RAG 上下文，
+    # 注入反而误导 LLM）。这份 seed 只用于「该不该调工具、调哪把」的 ReAct 决策。
     l1_hint = "\n".join(
         f"- ({h.get('similarity', 0):.2f}) {h.get('content', '')[:200]}"
         for h in ctx["l1_hits"][:5]
     )
-    base_seed: list[dict[str, str]] = [
+    tool_seed: list[dict[str, str]] = [
         {"role": "system", "content": system_prompt},
     ]
     if intent != Intent.CHAT:
-        base_seed.append(
+        tool_seed.append(
             {"role": "system", "content": f"【L1 检索预注入】\n{l1_hint or '（无）'}"}
         )
-    base_seed.append({"role": "user", "content": user_msg})
+        tool_hint = _INTENT_TOOL_HINT.get(intent)
+        if tool_hint:
+            tool_seed.append({"role": "system", "content": tool_hint})
+    tool_seed.append({"role": "user", "content": user_msg})
 
     logger.info(
         "react seed ready",
         extra=merge_extra(
             stage="chat_stream",
             event="seed_ready",
-            seed_len=len(base_seed),
-            system_len=sum(len(m["content"]) for m in base_seed if m["role"] == "system"),
+            intent=intent.value,
+            intent_source=intent_res.source,
+            seed_len=len(tool_seed),
+            system_len=sum(len(m["content"]) for m in tool_seed if m["role"] == "system"),
+            injected_l1_hint=intent != Intent.CHAT,
+            injected_tool_hint=bool(intent != Intent.CHAT and _INTENT_TOOL_HINT.get(intent)),
         ),
     )
 
-    final_text, tool_log = await _react_loop(
+    # ReAct 总是跑：即便意图是 CHAT，也给 LLM 一次机会决定要不要调工具。
+    # LLM 不调 → 走纯聊天快速路径；调了 → 拿到 tool_turns 进入最终生成。
+    # （规则快速路径识别出的寒暄已通过 tool_seed 的 system 提示引导，LLM 几乎不会误调。）
+    tool_log: list[dict[str, Any]] = []
+    tool_turns: list[dict[str, str]] = []
+    tool_log, tool_turns = await _resolve_tools(
         user_id=user_id,
         session_id=session_id,
-        messages=base_seed,
+        messages=tool_seed,
         max_iter=settings.react_max_iter,
     )
     for entry in tool_log:
@@ -566,12 +598,39 @@ async def chat_stream(
         ):
             emitted_resources.append(res)
             yield res
-    if final_text:
-        # LLM 经常在裸 URL 前自作主张加 https://，在 yield 前清掉
-        final_text = _strip_url_schemes(final_text)
-        # 直接输出 final_text（不走级联以保证一致性）
-        yield {"type": "prefix", "text": ""}
-        yield {"type": "delta", "text": final_text}
+
+    # 「最终回复生成」上下文：干净的对话（不带工具偏好/JSON 框架），含工具结果 + 收尾指令。
+    # 交由 cascade 做「小模型前缀 + 大模型实时续写」的流式生成。
+    final_messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+    ]
+    if intent != Intent.CHAT:
+        final_messages.append(
+            {"role": "system", "content": f"【L1 检索预注入】\n{l1_hint or '（无）'}"}
+        )
+    final_messages.append({"role": "user", "content": user_msg})
+    final_messages += tool_turns
+    if tool_turns:
+        final_messages.append(
+            {
+                "role": "system",
+                "content": "基于以上工具返回的信息，用自然语言直接回复用户；不要再调用工具或输出 JSON。",
+            }
+        )
+
+    # 流式级联：小模型前缀（首屏）+ 大模型逐 chunk 实时续写。
+    # LLM 常在裸 URL 前自作主张加 https://，逐段清掉 scheme 前缀后再下发。
+    async for ev in cascade_chat(
+        final_messages, prefix_tokens=settings.cascade_prefix_tokens
+    ):
+        et = ev.get("type")
+        if et == "prefix":
+            yield {"type": "prefix", "text": _strip_url_schemes(ev.get("text") or "")}
+        elif et == "delta":
+            yield {"type": "delta", "text": _strip_url_schemes(ev.get("text") or "")}
+        elif et == "done":
+            final_text = _strip_url_schemes(ev.get("full") or "")
+
     # 把可下载资源以 markdown 形式追加到 final_text 末尾，
     # 让只读 full 文本的前端也能拿到 URL（同时跳过 LLM 已经写过的）。
     appendix = _resources_as_appendix(emitted_resources, final_text or "")
@@ -625,14 +684,18 @@ async def chat_collect(user_id: str, session_id: str, user_msg: str) -> dict:
             )
             events.append({"type": "memory_extracted", "ok": True})
         except Exception as e:
-            logger.exception(
+            log_exception(
+                logger,
                 "memory extract (sync) failed",
-                extra=merge_extra(
-                    stage="memory_extract_sync",
-                    event="error",
-                    duration_ms=round((time.perf_counter() - t) * 1000, 2),
-                    error=str(e)[:300],
-                ),
+                exc=e,
+                level=logging.ERROR,
+                stage="memory_extract_sync",
+                event="error",
+                user_id=user_id,
+                session_id=session_id,
+                user_msg_len=len(user_msg or ""),
+                assistant_msg_len=len(full or ""),
+                duration_ms=round((time.perf_counter() - t) * 1000, 2),
             )
             events.append({"type": "memory_extracted", "ok": False, "error": str(e)[:200]})
     return {

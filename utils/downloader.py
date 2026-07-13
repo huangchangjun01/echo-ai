@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import httpx
 
 from config.config import get_settings
+from utils.request_context import log_silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +100,15 @@ async def download_file_async(
             qiniu_host = urlparse(settings.qiniu.base_url).hostname
             if qiniu_host:
                 allowed = [qiniu_host]
-        except Exception:
-            pass
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "auto-derive allowed subdomain from qiniu base_url failed (skip)",
+                exc=e,
+                stage="downloader_resolve",
+                event="qiniu_base_parse_error",
+                base_url=settings.qiniu.base_url,
+            )
 
     _is_safe_url(url, allowed)
 

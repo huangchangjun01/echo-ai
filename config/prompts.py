@@ -39,7 +39,11 @@ MEMORY_EXTRACT_SYSTEM = """你是一名记忆抽取助手，负责把对话中�
 - "intensity": 0~1 之间的情感强度
 - "relation": 相对历史的 "causes" / "update" / "contradict" / "extend"（无则为空）
 
-只输出 JSON 数组，不要额外说明。"""
+【输出格式硬性要求】
+1. 只输出 JSON 数组本身，不要用 markdown 代码块包裹（不要 ```json ... ```）。
+2. 字符串值内部如果需要引用原话，必须使用中文引号「」或『』，禁止使用英文双引号 "，否则 JSON 会解析失败。
+3. 字符串值内的反斜杠、引号字符必须按 JSON 规范转义。
+4. 不要在 JSON 前后输出任何说明性文字。"""
 
 MEMORY_EXTRACT_USER_TEMPLATE = """用户：{user_msg}
 助手：{assistant_msg}
@@ -65,8 +69,14 @@ INTENT_CLASSIFY_SYSTEM = """你是意图分类器。根据用户最近一条消�
 - chat：闲聊/情感倾诉/知识问答，与"在我的资料里找"无关
 - recall：回忆过去的对话或已知事实（"我叫什么""上次我说过"）
 - text_search：明确要文本片段（笔记/摘录/文章）
-- image_search：明确要图片（"那张狗的照片""找张图"）
+- image_search：明确要图片或想看照片（"找张猫的图片""想看那张照片""之前那张图"）
 - doc_search：明确要文档文件（PDF/简历/合同）
+
+判断要点（务必注意）：
+1. 出现「想看 / 给我看 / 找张图 / 那张照片 / 翻出图 / 看看图」等任何带视觉诉求的动词时，
+   即使没明说"在我的资料里"，也归 image_search（用户期望命中历史 RAG 里的图）。
+2. 复合句（「我想看猫，顺便告诉我它叫什么名字」）取主导意图：前半段要图 → image_search。
+3. 仅当用户完全没有「想看 / 找 / 回忆 / 文档」语义时，才选 chat。
 
 只输出一个 JSON：{"intent": "<chat|recall|text_search|image_search|doc_search>", "reason": "<10字内>"}"""
 

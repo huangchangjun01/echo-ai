@@ -4,6 +4,12 @@
 新代码统一使用 `vector_id` / `category` / `relation` / `weight` / `user_id`。
 """
 
+import logging
+
+from utils.request_context import log_exception
+
+logger = logging.getLogger(__name__)
+
 # ---------- DDL：幂等创建 ----------
 DDL_STATEMENTS: tuple[str, ...] = (
     # ---------- 人格 ----------
@@ -152,11 +158,17 @@ async def ensure_schema(cur) -> None:
             try:
                 await _execute(alter_sql)
             except Exception as e:
-                # 列已存在等冲突直接忽略
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "ALTER probe failed for %s.%s: %s", table, col, e
+                # 列已存在等冲突直接忽略（Duplicate column 等是预期行为）
+                log_exception(
+                    logger,
+                    "ALTER probe failed",
+                    exc=e,
+                    level=logging.WARNING,
+                    include_traceback=False,
+                    stage="schema",
+                    event="alter_probe_error",
+                    table=table,
+                    column=col,
                 )
 
 

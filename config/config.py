@@ -149,13 +149,17 @@ class MemorySettings(BaseSettings):
     dedup_threshold: float = 0.92
     react_max_iter: int = 3
     enable_async_extract: bool = True
+    # 级联前缀：小模型先吐的 token 数（首字延迟敏感）。太小看不到预览，太大拖慢首屏。
+    cascade_prefix_tokens: int = 64
     # 单次搜索最多返回的命中数；默认 1，UI 只展示最相关的一条。
     search_max_hits: int = 1
 
     # 意图识别闸门：每次 chat 先用小模型分类（chat/recall/text_search/image_search/doc_search），
-    # 仅在 image_search 等检索类意图下才触发 RAG 跨模态预注入。
+    # 下游 RAG / 工具调度都按这个意图走。给定当前默认小模型是推理型，<2.5s
+    # 几乎不可能完成「思考 + JSON」一轮；给到 4s 让 90%+ 一次响应能完成。
+    # 若换成非推理小模型，把这个值调回 1500 即可。
     intent_classifier_enabled: bool = True
-    intent_timeout_ms: int = 1500
+    intent_timeout_ms: int = 40000
 
 
 class IngestSettings(BaseSettings):

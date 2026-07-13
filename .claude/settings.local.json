@@ -69,7 +69,28 @@
       "Bash(git stash *)",
       "Bash(PYTHONIOENCODING=utf-8 PYTHONPATH=. timeout 15 python run.py)",
       "Bash(PYTHONIOENCODING=utf-8 PYTHONPATH=. python -c ' *)",
-      "Bash(PYTHONIOENCODING=utf-8 PYTHONPATH=. timeout 25 python run.py)"
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONPATH=. timeout 25 python run.py)",
+      "Bash(grep -E \"^LLM_|^SMALL\" .env)",
+      "Bash(grep -E \"^LLM_|^SMALL\" .env.example)",
+      "Bash(grep *)",
+      "Bash(PYTHONIOENCODING=utf-8 ls tests/)",
+      "Bash(PYTHONIOENCODING=utf-8 cat \"C:\\\\Users\\\\h4215\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\E--Python-workspace-echo-ai\\\\8169a641-240b-4e9c-a652-7d529f820b06\\\\tasks\\\\b4sb5jmjd.output\")",
+      "Bash(PYTHONIOENCODING=utf-8 cat \"C:\\\\Users\\\\h4215\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\E--Python-workspace-echo-ai\\\\8169a641-240b-4e9c-a652-7d529f820b06\\\\tasks\\\\bqb4zdsbg.output\")",
+      "Bash(PYTHONIOENCODING=utf-8 python -m pytest tests/test_api.py -k \"test_chat_returns_candidates\" -x --no-header --tb=short -W ignore::Warning)",
+      "Read(//tmp/**)",
+      "Bash(python run.py)",
+      "Bash(echo \"started PID $!\")",
+      "Bash(cmd.exe /c \"taskkill /PID 22940 /F\")",
+      "Bash(cmd.exe /c \"taskkill /F /PID 22940\")",
+      "Bash(iconv -f gbk -t utf-8)",
+      "Bash(powershell.exe -Command \"Stop-Process -Id 22940 -Force\")",
+      "Bash(tasklist /FI \"PID eq 22940\")",
+      "Bash(powershell.exe -Command \"Stop-Process -Id 27148 -Force\")",
+      "Bash(powershell.exe -Command 'Get-Process -Name python -ErrorAction SilentlyContinue | ForEach-Object { try { $p = Get-CimInstance Win32_Process -Filter \"ProcessId = $\\($_.Id\\)\"; if \\($p.CommandLine -like '\\\\''*echo-ai*'\\\\'' -or $p.CommandLine -like '\\\\''*agent_runner*'\\\\''\\) { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } } catch {} }')",
+      "Bash(tee logs/server.log)",
+      "Bash(powershell.exe -Command 'Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')",
+      "Bash(python tools/unit_extractor_parse.py)",
+      "Bash(curl -s -o /dev/null -w \"server_http=%{http_code}\\\\n\" --max-time 3 http://127.0.0.1:8000/health)"
     ]
   }
 }

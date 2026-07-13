@@ -13,40 +13,56 @@ import time
 from typing import Any
 
 from config.config import get_settings
-from utils.request_context import log_stage, merge_extra
+from utils.request_context import log_exception, log_silent_failure, log_stage, merge_extra
 
 logger = logging.getLogger(__name__)
 
 
 def _log_table_error(op: str, exc: Exception, table: str, *, extra: dict | None = None) -> None:
-    """把 MySQL 异常翻译成可读的提示，避免被 2013 'Lost connection' 误导。
+    """把 MySQL 异常翻译成可读的提示，避免被 2013 'Lost connection' 误导，
+    并打印完整 traceback 方便定位。
 
     - 1146: 表不存在（通常是被人工 DROP 了，init_schema() 会自动补建）
-    - 2013/2006: 真断连（网络 / 服务重启 / max_connections 触顶）
+    - 2013/2006/2014/2055: 真断连（网络 / 服务重启 / max_connections 触顶）
     - 其它: 原样
+
+    关键字段：
+    - ``op`` / ``table`` / ``code`` / ``sql``（若有）：便于 grep
+    - ``error_type`` / ``error_msg`` / ``error_module`` / ``error_class``：
+      由 ``log_exception`` 自动注入
+    - 完整 Python traceback：在 ERROR 级别逐行输出
     """
     code = None
     args = getattr(exc, "args", ())
     if args and isinstance(args[0], int):
         code = args[0]
-    fields = {"op": op, "table": table, "code": code, "exc": str(exc)[:200], **(extra or {})}
+    event_name = (
+        "table_missing" if code == 1146
+        else "lost_connection" if code in (2013, 2006, 2014, 2055)
+        else "error"
+    )
+    fields: dict = {
+        "op": op,
+        "table": table,
+        "code": code,
+        **(extra or {}),
+    }
     if code == 1146:
-        logger.warning(
-            "%s: 表 %s 不存在 — 服务启动时会通过 init_schema() 幂等创建；若持续缺失请检查 init_schema 日志",
-            op, table,
-            extra=merge_extra(stage="db", event="table_missing", **fields),
-        )
+        msg = f"{op}: 表 {table} 不存在 — 服务启动时会通过 init_schema() 幂等创建；若持续缺失请检查 init_schema 日志"
     elif code in (2013, 2006, 2014, 2055):
-        logger.warning(
-            "%s: MySQL 断连 (%s) — 检查网络 / 服务状态 / max_connections: %s",
-            op, code, exc,
-            extra=merge_extra(stage="db", event="lost_connection", **fields),
-        )
+        msg = f"{op}: MySQL 断连 (code={code}) — 检查网络 / 服务状态 / max_connections"
     else:
-        logger.warning(
-            "%s failed: %s", op, exc,
-            extra=merge_extra(stage="db", event="error", **fields),
-        )
+        msg = f"{op} failed on table={table}"
+    log_exception(
+        logger,
+        msg,
+        exc=exc,
+        level=logging.WARNING,
+        include_traceback=True,
+        stage="db",
+        event=event_name,
+        **fields,
+    )
 
 
 # ---------- L0 ----------
@@ -294,15 +310,19 @@ async def multimodal_search(
         )
         return {"hits": hits, "modality_counts": modality_counts}
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "multimodal_search failed",
-            extra=merge_extra(
-                stage="memory_multimodal",
-                event="error",
-                user_id=user_id,
-                error=str(e)[:200],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            level=logging.WARNING,
+            include_traceback=True,
+            stage="memory_multimodal",
+            event="error",
+            user_id=user_id,
+            query_preview=(query or "")[:80],
+            top_k=top_k,
+            max_hits=max_hits,
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return {"hits": [], "modality_counts": {}}
 

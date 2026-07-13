@@ -19,7 +19,7 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -75,17 +75,20 @@ class LLMClient:
                 tools=tools,  # type: ignore[arg-type]
             )
         except Exception as e:
-            logger.error(
+            log_exception(
+                logger,
                 "LLM chat failed",
-                extra=merge_extra(
-                    stage="llm_chat",
-                    event="error",
-                    model=self.model,
-                    msg_count=len(messages),
-                    max_tokens=eff_max,
-                    error=str(e)[:300],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                ),
+                exc=e,
+                level=logging.ERROR,
+                include_traceback=True,
+                stage="llm_chat",
+                event="error",
+                model=self.model,
+                msg_count=len(messages),
+                max_tokens=eff_max,
+                temperature=eff_temp,
+                has_tools=bool(tools),
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             raise
         data = _to_dict(resp)
@@ -105,8 +108,15 @@ class LLMClient:
                     duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                 ),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "usage log on chat ok failed (skipped)",
+                exc=e,
+                stage="llm_chat",
+                event="usage_log_error",
+                model=self.model,
+            )
         return data
 
     async def stream(
@@ -142,19 +152,33 @@ class LLMClient:
                         delta_count += 1
                         out_chars += len(delta)
                         yield delta
-                except Exception:
+                except Exception as e:
+                    log_silent_failure(
+                        logger,
+                        "stream chunk decode failed (skip)",
+                        exc=e,
+                        stage="llm_stream",
+                        event="chunk_decode_error",
+                        model=self.model,
+                    )
                     continue
         except Exception as e:
-            logger.error(
+            log_exception(
+                logger,
                 "LLM stream failed",
-                extra=merge_extra(
-                    stage="llm_stream",
-                    event="error",
-                    model=self.model,
-                    msg_count=len(messages),
-                    error=str(e)[:300],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                ),
+                exc=e,
+                level=logging.ERROR,
+                include_traceback=True,
+                stage="llm_stream",
+                event="error",
+                model=self.model,
+                msg_count=len(messages),
+                max_tokens=eff_max,
+                temperature=eff_temp,
+                delta_count=delta_count,
+                out_chars=out_chars,
+                first_delta_ms=round((first_delta_at - t0) * 1000, 2) if first_delta_at else None,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             raise
         finally:
@@ -172,8 +196,15 @@ class LLMClient:
                         duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                     ),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "stream end log failed (skipped)",
+                    exc=e,
+                    stage="llm_stream",
+                    event="end_log_error",
+                    model=self.model,
+                )
 
     # ---------- 小模型（情感微模型 / 快速前缀） ----------
 
@@ -215,15 +246,18 @@ class LLMClient:
             )
             return text
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "small_prefix failed",
-                extra=merge_extra(
-                    stage="small_prefix",
-                    event="error",
-                    model=self.small_model,
-                    error=str(e)[:200],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="small_prefix",
+                event="error",
+                model=self.small_model,
+                msg_count=len(messages),
+                temperature=eff_temp,
+                max_tokens=eff_max,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             return ""
 
@@ -260,18 +294,30 @@ class LLMClient:
                         delta_count += 1
                         out_chars += len(delta)
                         yield delta
-                except Exception:
+                except Exception as e:
+                    log_silent_failure(
+                        logger,
+                        "small_stream chunk decode failed (skip)",
+                        exc=e,
+                        stage="small_stream",
+                        event="chunk_decode_error",
+                        model=self.small_model,
+                    )
                     continue
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "small_stream failed",
-                extra=merge_extra(
-                    stage="small_stream",
-                    event="error",
-                    model=self.small_model,
-                    error=str(e)[:200],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="small_stream",
+                event="error",
+                model=self.small_model,
+                msg_count=len(messages),
+                temperature=eff_temp,
+                max_tokens=eff_max,
+                delta_count=delta_count,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             return
         finally:
@@ -288,8 +334,15 @@ class LLMClient:
                         duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                     ),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "small_stream end log failed (skipped)",
+                    exc=e,
+                    stage="small_stream",
+                    event="end_log_error",
+                    model=self.small_model,
+                )
 
 
 # ---------- 工具函数 ----------
@@ -311,7 +364,14 @@ def _extract_text(data: dict[str, Any]) -> str:
             return ""
         msg = choices[0].get("message") or {}
         return msg.get("content") or ""
-    except Exception:
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "_extract_text fallback to empty",
+            exc=e,
+            stage="llm_extract_text",
+            event="extract_error",
+        )
         return ""
 
 
@@ -335,8 +395,15 @@ def parse_tool_call(text: str) -> dict | None:
             obj = json.loads(text)
             if isinstance(obj, dict) and obj.get("tool"):
                 return obj
-        except Exception:
-            pass
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "parse_tool_call: whole JSON parse failed",
+                exc=e,
+                stage="llm_parse_tool_call",
+                event="whole_json_error",
+                text_preview=text[:80],
+            )
     # 2) 抽取首个 JSON 片段
     m = _JSON_BLOCK.search(text)
     if m:
@@ -344,8 +411,15 @@ def parse_tool_call(text: str) -> dict | None:
             obj = json.loads(m.group(0))
             if isinstance(obj, dict) and obj.get("tool"):
                 return obj
-        except Exception:
-            pass
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "parse_tool_call: embedded JSON parse failed",
+                exc=e,
+                stage="llm_parse_tool_call",
+                event="embedded_json_error",
+                snippet_preview=m.group(0)[:80],
+            )
     return None
 
 

@@ -32,6 +32,8 @@ from embedding.embeddings import ChineseCLIPEmbeddings
 from utils.logging_setup import setup_logging
 from utils.request_context import (
     bind_request,
+    log_exception,
+    log_silent_failure,
     merge_extra,
     unbind_request,
 )
@@ -81,9 +83,13 @@ async def lifespan(app: FastAPI):
             extra=merge_extra(stage="init_schema", event="ok", duration_ms=round((time.perf_counter() - t0) * 1000, 2)),
         )
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "MySQL init failed",
-            extra=merge_extra(stage="init_schema", event="error", error=str(e)[:300]),
+            exc=e,
+            stage="init_schema",
+            event="error",
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         raise
 
@@ -102,14 +108,16 @@ async def lifespan(app: FastAPI):
                     ),
                 )
             except Exception as e:  # noqa: BLE001
-                logger.warning(
+                log_exception(
+                    logger,
                     "BGE-M3 warmup failed (non-fatal)",
-                    extra=merge_extra(
-                        stage="bge_warmup",
-                        event="error",
-                        duration_ms=round((time.perf_counter() - t1) * 1000, 2),
-                        error=str(e)[:300],
-                    ),
+                    exc=e,
+                    level=logging.WARNING,
+                    stage="bge_warmup",
+                    event="error",
+                    device=settings.bge_m3.device,
+                    model=settings.bge_m3.model,
+                    duration_ms=round((time.perf_counter() - t1) * 1000, 2),
                 )
 
         app.state.warmup_task = asyncio.create_task(_warmup_bg())
@@ -118,9 +126,14 @@ async def lifespan(app: FastAPI):
             extra=merge_extra(stage="bge_warmup", event="scheduled"),
         )
     except Exception as e:
-        logger.warning(
+        log_exception(
+            logger,
             "BGE-M3 warmup schedule failed",
-            extra=merge_extra(stage="bge_warmup", event="error", error=str(e)[:300]),
+            exc=e,
+            level=logging.WARNING,
+            stage="bge_warmup",
+            event="error",
+            device=settings.bge_m3.device,
         )
 
     app.state.settings = settings
@@ -142,9 +155,15 @@ async def lifespan(app: FastAPI):
             await close_db_pool()
             logger.info("MySQL pool closed", extra=merge_extra(stage="lifespan_end", event="db_closed"))
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "close_db_pool failed",
-                extra=merge_extra(stage="lifespan_end", event="db_close_error", error=str(e)[:200]),
+                exc=e,
+                level=logging.WARNING,
+                stage="lifespan_end",
+                event="db_close_error",
+                db_host=settings.db.host,
+                db_name=settings.db.name,
             )
         logger.info(
             "Echo-AI shutdown complete",
@@ -275,9 +294,16 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
                                 assistant_msg=nonlocal_full["v"],
                             )
                         except Exception as e:  # noqa: BLE001
-                            logger.warning(
+                            log_exception(
+                                logger,
                                 "memory extract (fire-and-forget) failed",
-                                extra=merge_extra(stage="memory_extract", event="error", error=str(e)[:300]),
+                                exc=e,
+                                level=logging.WARNING,
+                                stage="memory_extract",
+                                event="error",
+                                user_id=user_id,
+                                session_id=session_id,
+                                reply_len=len(nonlocal_full["v"]),
                             )
                         finally:
                             unbind_request(inner_token)
@@ -309,9 +335,19 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
             "latencyMs": result["latency_ms"],
         }
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "/chat failed",
-            extra=merge_extra(event="error", error=str(e)[:300]),
+            exc=e,
+            level=logging.ERROR,
+            stage="chat",
+            event="error",
+            user_id=user_id,
+            session_id=session_id,
+            msg_len=msg_len,
+            stream=bool(req.stream),
+            msg_preview=(req.message or "")[:120],
+            chat_latency_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         raise
     finally:
@@ -346,9 +382,15 @@ async def ingest_file_endpoint(req: IngestRequest, background: BackgroundTasks) 
     try:
         vectorstore = await asyncio.to_thread(vs_module.get_vector_store)
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "vector store init failed",
-            extra=merge_extra(stage="ingest_file", event="error", error=str(e)[:300]),
+            exc=e,
+            stage="ingest_file",
+            event="error",
+            user_id=req.userId,
+            file_id=req.file.fileId,
+            weaviate_class=get_settings().weaviate.class_name,
         )
         raise HTTPException(status_code=500, detail=f"vector store init failed: {e}")
 

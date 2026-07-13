@@ -10,6 +10,7 @@ from langchain_core.embeddings import Embeddings
 
 from config.config import get_settings
 from embedding import models as _repo_models
+from utils.request_context import log_exception, log_silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,14 @@ def _image_fallback(images: Sequence[bytes | Any], dim: int) -> list[list[float]
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
                 b = buf.getvalue()
-            except Exception:
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "image fallback: save to PNG failed (hash str instead)",
+                    exc=e,
+                    stage="clip_embed_image_fallback",
+                    event="png_save_error",
+                )
                 b = str(img).encode("utf-8")
         h = hashlib.sha256(b).digest()
         vals: list[float] = []
@@ -77,7 +85,16 @@ class ChineseCLIPEmbeddings(Embeddings):
 
                 self._st = SentenceTransformer(self.model_name or "sentence-transformers/all-MiniLM-L6-v2", device=self.device)
                 self._embed_fn = lambda texts: [list(map(float, v)) for v in self._st.encode(list(texts))]
-            except Exception:
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "sentence_transformers unavailable, use SHA256 fallback",
+                    exc=e,
+                    stage="clip_embed_init",
+                    event="st_load_error",
+                    model=self.model_name,
+                    device=self.device,
+                )
                 self._embed_fn = lambda texts: _sha256_fallback(list(texts), self.dim)
 
         if hasattr(_repo_models, "compute_image_embeddings"):
@@ -90,7 +107,16 @@ class ChineseCLIPEmbeddings(Embeddings):
             try:
                 _repo_models.warmup(device=self.device)
             except Exception as e:
-                logger.warning("warmup failed: %s", e)
+                log_exception(
+                    logger,
+                    "embedding warmup failed",
+                    exc=e,
+                    level=logging.WARNING,
+                    stage="embed_warmup",
+                    event="error",
+                    device=self.device,
+                    model=self.model_name,
+                )
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         texts = list(texts)
@@ -119,7 +145,15 @@ class ChineseCLIPEmbeddings(Embeddings):
             return [[0.0] * self.dim for _ in range(expected)]
         try:
             res_list = res.tolist() if hasattr(res, "tolist") else res
-        except Exception:
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "res.tolist() failed (use raw)",
+                exc=e,
+                stage="clip_normalize_batch",
+                event="res_tolist_error",
+                expected=expected,
+            )
             res_list = res
 
         if isinstance(res_list, (list, tuple)) and res_list and all(isinstance(x, (int, float)) for x in res_list):
@@ -132,7 +166,15 @@ class ChineseCLIPEmbeddings(Embeddings):
                 continue
             try:
                 item_list = item.tolist() if hasattr(item, "tolist") else list(item)
-            except Exception:
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "item.tolist() failed (skip)",
+                    exc=e,
+                    stage="clip_normalize_batch",
+                    event="item_tolist_error",
+                    expected=expected,
+                )
                 continue
             if all(isinstance(x, (int, float)) for x in item_list):
                 out.append([float(x) for x in item_list])

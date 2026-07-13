@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from tools.base import BaseTool, ToolResult, ok
+from utils.request_context import log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,16 @@ async def _understand_audio_async(audio_url: str) -> ToolResult:
             resp.raise_for_status()
             data = resp.content
     except Exception as e:
-        logger.warning("audio download failed: %s", e)
+        log_exception(
+            logger,
+            "audio download failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="understand_audio",
+            event="download_error",
+            audio_url=audio_url,
+            timeout_s=30.0,
+        )
         return ok({"text": "", "embedding": [], "error": str(e)})
 
     try:
@@ -55,7 +65,16 @@ async def _understand_audio_async(audio_url: str) -> ToolResult:
 
         result = await asyncio.to_thread(whisper.embed_audio, data)
     except Exception as e:
-        logger.warning("whisper embed failed: %s", e)
+        log_exception(
+            logger,
+            "whisper embed failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="understand_audio",
+            event="whisper_error",
+            audio_url=audio_url,
+            audio_bytes=len(data or b""),
+        )
         return ok({"text": "", "embedding": [], "error": str(e)})
 
     return ok(result)

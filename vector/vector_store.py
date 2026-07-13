@@ -12,7 +12,7 @@ import httpx
 from cachetools import TTLCache
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -159,8 +159,15 @@ class _WeaviateHttpClient:
         if self._owns_client:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "close Weaviate client failed",
+                    exc=e,
+                    stage="vector_close",
+                    event="client_close_error",
+                    class_name=self.class_name,
+                )
 
     # ---------- schema ----------
 
@@ -317,7 +324,16 @@ class WeaviateVectorStore:
                 if self._http.add_property(self.class_name, prop):
                     logger.info("Added property %s to %s", prop["name"], self.class_name)
             except Exception as e:
-                logger.warning("Failed to add property %s: %s", prop["name"], e)
+                log_exception(
+                    logger,
+                    "add_property failed (skipped)",
+                    exc=e,
+                    level=logging.WARNING,
+                    stage="vector_schema",
+                    event="add_prop_error",
+                    class_name=self.class_name,
+                    prop_name=prop["name"],
+                )
 
     # ---------- write ----------
 
@@ -432,15 +448,15 @@ class WeaviateVectorStore:
             q_emb = embedding_fn([query_text])[0]
             embed_ms = round((time.perf_counter() - t0) * 1000, 2)
         except Exception as e:
-            logger.error(
+            log_exception(
+                logger,
                 "embedding_fn call failed",
-                extra=merge_extra(
-                    stage="vector_query",
-                    event="embed_error",
-                    class_name=self.class_name,
-                    tenant=tenant_id,
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                stage="vector_query",
+                event="embed_error",
+                class_name=self.class_name,
+                tenant=tenant_id,
+                query_preview=(query_text or "")[:80],
             )
             raise ValueError("embedding_fn call failed.") from e
 
@@ -453,15 +469,16 @@ class WeaviateVectorStore:
             http_ms = round((time.perf_counter() - t1) * 1000, 2)
             items = _extract_get_payload(payload, self.class_name)
         except Exception as e:
-            logger.error(
+            log_exception(
+                logger,
                 "Weaviate query failed",
-                extra=merge_extra(
-                    stage="vector_query",
-                    event="http_error",
-                    class_name=self.class_name,
-                    tenant=tenant_id,
-                    error=str(e)[:300],
-                ),
+                exc=e,
+                stage="vector_query",
+                event="http_error",
+                class_name=self.class_name,
+                tenant=tenant_id,
+                query_preview=(query_text or "")[:80],
+                http_ms=http_ms if 'http_ms' in locals() else None,
             )
             raise
 
@@ -533,7 +550,15 @@ class WeaviateVectorStore:
         try:
             return self._http.get_object(self.class_name, doc_id)
         except Exception as e:
-            logger.error("get_document failed for id=%s: %s", doc_id, e)
+            log_exception(
+                logger,
+                "get_document failed",
+                exc=e,
+                stage="vector_query",
+                event="get_doc_error",
+                class_name=self.class_name,
+                doc_id=doc_id,
+            )
             return None
 
     def delete(self, ids: Sequence[str]) -> None:
@@ -542,7 +567,15 @@ class WeaviateVectorStore:
                 self._http.delete_object(self.class_name, id_)
                 logger.info("Deleted id=%s", id_)
             except Exception as e:
-                logger.error("Failed to delete id=%s: %s", id_, e)
+                log_exception(
+                    logger,
+                    "delete_object failed",
+                    exc=e,
+                    stage="vector_write",
+                    event="delete_error",
+                    class_name=self.class_name,
+                    doc_id=id_,
+                )
         if self._cache is not None:
             with self._cache_lock:
                 self._cache.clear()
@@ -550,8 +583,15 @@ class WeaviateVectorStore:
     def close(self) -> None:
         try:
             self._http.close()
-        except Exception:
-            pass
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "close Weaviate client failed",
+                exc=e,
+                stage="vector_close",
+                event="client_close_error",
+                class_name=self.class_name,
+            )
         logger.info("Weaviate client closed")
 
 
@@ -575,6 +615,12 @@ def reset_vector_store() -> None:
         if _singleton is not None:
             try:
                 _singleton.close()
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "reset_vector_store: close failed",
+                    exc=e,
+                    stage="vector_close",
+                    event="reset_error",
+                )
         _singleton = None

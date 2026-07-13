@@ -12,7 +12,7 @@ from config.config import get_settings
 from embedding.embeddings import ChineseCLIPEmbeddings
 from embedding.models import compute_image_embeddings, compute_text_embeddings
 from utils.downloader import DownloadError, download_file_async
-from utils.request_context import log_stage, merge_extra
+from utils.request_context import log_exception, log_silent_failure, log_stage, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,14 @@ def _detect_mime(data: bytes) -> str:
         import magic  # type: ignore
 
         return magic.from_buffer(data, mime=True) or "application/octet-stream"
-    except Exception:
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "libmagic unavailable, use builtin sniffer",
+            exc=e,
+            stage="ingest_mime",
+            event="magic_import_error",
+        )
         if not data:
             return "application/octet-stream"
         head = data[:16]
@@ -86,8 +93,16 @@ def _detect_mime(data: bytes) -> str:
             try:
                 sample.decode(enc)
                 return "text/plain"
-            except Exception:
+            except Exception as e:
                 # Allow lone invalid tail bytes (common in CJK when the cut falls mid-codepoint).
+                log_silent_failure(
+                    logger,
+                    "strict sample decode failed; evaluating lenient ratio",
+                    exc=e,
+                    stage="ingest_mime",
+                    event="sample_decode_strict_error",
+                    encoding=enc,
+                )
                 bad = sample.decode(enc, errors="ignore").count("�")
                 if bad <= max(1, len(sample) // 64):
                     return "text/plain"
@@ -98,7 +113,15 @@ def _decode_text(data: bytes) -> str:
     for enc in ("utf-8", "utf-8-sig", "gbk", "gb18030"):
         try:
             return data.decode(enc)
-        except Exception:
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "decode_text: enc failed, try next",
+                exc=e,
+                stage="ingest_decode",
+                event="enc_decode_error",
+                encoding=enc,
+            )
             continue
     return data.decode("utf-8", errors="replace")
 
@@ -118,7 +141,15 @@ def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
             separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""],
         )
         return [c for c in splitter.split_text(text) if c.strip()]
-    except Exception:
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "langchain splitter unavailable, use fixed-size window",
+            exc=e,
+            stage="ingest_split",
+            event="splitter_load_error",
+            text_len=len(text or ""),
+        )
         # Fallback: fixed-size windows.
         step = max(1, chunk_size - chunk_overlap)
         return [text[i : i + chunk_size] for i in range(0, max(1, len(text)), step)]
@@ -153,16 +184,18 @@ async def _download_with_retry(url: str) -> bytes:
                 return data
             except Exception as e:
                 last_exc = e
-                logger.warning(
+                log_exception(
+                    logger,
                     "download attempt failed",
-                    extra=merge_extra(
-                        stage="download",
-                        event="retry",
-                        attempt=attempt_idx,
-                        url=url,
-                        error=str(e)[:200],
-                        elapsed_ms=round((time.perf_counter() - t0) * 1000, 2),
-                    ),
+                    exc=e,
+                    level=logging.WARNING,
+                    stage="download",
+                    event="retry",
+                    attempt=attempt_idx,
+                    max_attempts=max(1, settings.download_retries),
+                    url=url,
+                    timeout_s=settings.download_timeout_seconds,
+                    elapsed_ms=round((time.perf_counter() - t0) * 1000, 2),
                 )
                 raise
     if last_exc:
@@ -204,23 +237,29 @@ async def ingest_file(
     if not url:
         logger.error(
             "ingest missing url",
-            extra=merge_extra(stage="ingest", event="error", error="missing url"),
+            extra=merge_extra(
+                stage="ingest",
+                event="error",
+                file_id=file_id,
+                file_name=file_name,
+                has_file_key=bool(file_key),
+                error="missing url",
+            ),
         )
         return IngestResult(False, file_id, error="Missing URL")
 
     try:
         data = await _download_with_retry(url)
     except Exception as e:
-        logger.error(
+        log_exception(
+            logger,
             "ingest download failed",
-            extra=merge_extra(
-                stage="ingest",
-                event="download_error",
-                file_id=file_id,
-                url=url,
-                error=str(e)[:300],
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
+            exc=e,
+            stage="ingest",
+            event="download_error",
+            file_id=file_id,
+            url=url,
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return IngestResult(False, file_id, error=f"Download failed: {e}")
 
@@ -248,7 +287,10 @@ async def ingest_file(
                 stage="ingest",
                 event="rejected",
                 file_id=file_id,
+                file_name=file_name,
+                url=url,
                 mime=mime,
+                bytes=len(data),
             ),
         )
         return IngestResult(False, file_id, error=f"Unsupported binary content type: {mime}")
@@ -271,7 +313,15 @@ async def ingest_file(
 
     logger.error(
         "ingest unsupported mime",
-        extra=merge_extra(stage="ingest", event="unsupported_mime", file_id=file_id, mime=mime),
+        extra=merge_extra(
+            stage="ingest",
+            event="unsupported_mime",
+            file_id=file_id,
+            file_name=file_name,
+            url=url,
+            mime=mime,
+            bytes=len(data),
+        ),
     )
     return IngestResult(
         False,
@@ -302,6 +352,7 @@ def result_log_common(result: IngestResult, t0: float) -> None:
                 event="error",
                 file_id=result.file_id,
                 err=result.error or "",
+                chunks=result.chunks,
                 duration_ms=elapsed,
             ),
         )
@@ -356,9 +407,17 @@ async def _ingest_text(
             ),
         )
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "text embedding failed",
-            extra=merge_extra(stage="ingest_text", event="embed_error", file_id=file_id),
+            exc=e,
+            stage="ingest_text",
+            event="embed_error",
+            file_id=file_id,
+            url=url,
+            chunk_count=len(chunks),
+            chunk_strategy=chunk_strategy,
+            embed_model=embed_settings.model_name,
         )
         return IngestResult(False, file_id, error=f"Embedding failed: {e}")
 
@@ -386,9 +445,15 @@ async def _ingest_text(
             ),
         )
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "vector store write failed",
-            extra=merge_extra(stage="ingest_text", event="vector_write_error", file_id=file_id),
+            exc=e,
+            stage="ingest_text",
+            event="vector_write_error",
+            file_id=file_id,
+            chunk_count=len(chunks),
+            url=url,
         )
         return IngestResult(False, file_id, error=f"Vector store failed: {e}")
     return IngestResult(True, file_id, chunks=len(chunks))
@@ -417,9 +482,15 @@ async def _ingest_image(
             ),
         )
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "image embedding failed",
-            extra=merge_extra(stage="ingest_image", event="embed_error", file_id=file_id),
+            exc=e,
+            stage="ingest_image",
+            event="embed_error",
+            file_id=file_id,
+            url=url,
+            image_bytes=len(data or b""),
         )
         return IngestResult(False, file_id, error=f"Image embedding failed: {e}")
 
@@ -446,9 +517,14 @@ async def _ingest_image(
             ),
         )
     except Exception as e:
-        logger.exception(
+        log_exception(
+            logger,
             "vector store write failed",
-            extra=merge_extra(stage="ingest_image", event="vector_write_error", file_id=file_id),
+            exc=e,
+            stage="ingest_image",
+            event="vector_write_error",
+            file_id=file_id,
+            url=url,
         )
         return IngestResult(False, file_id, error=f"Vector store failed: {e}")
     return IngestResult(True, file_id, chunks=1)

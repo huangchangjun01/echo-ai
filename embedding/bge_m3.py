@@ -16,7 +16,7 @@ import threading
 import time
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,14 @@ def _resolve_device(device: str) -> str:
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return "mps"
         return "cpu"
-    except Exception:
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "torch device probe failed, fallback to cpu",
+            exc=e,
+            stage="bge_resolve_device",
+            event="torch_probe_error",
+        )
         return "cpu"
 
 
@@ -92,15 +99,16 @@ def _load_model():
                 ),
             )
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "BGE-M3 load failed, use fallback",
-                extra=merge_extra(
-                    stage="bge_load",
-                    event="fallback",
-                    model=cfg.model,
-                    device=resolved,
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="bge_load",
+                event="fallback",
+                model=cfg.model,
+                device=resolved,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             _model = None
         _model_loaded = True
@@ -126,13 +134,15 @@ def warmup() -> None:
             ),
         )
     except Exception as e:  # noqa: BLE001
-        logger.warning(
+        log_exception(
+            logger,
             "BGE-M3 warmup failed",
-            extra=merge_extra(
-                stage="bge_warmup",
-                event="error",
-                error=str(e)[:200],
-            ),
+            exc=e,
+            level=logging.WARNING,
+            stage="bge_warmup",
+            event="error",
+            device=str(model.device) if 'model' in locals() and model else None,
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
 
 
@@ -168,15 +178,17 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
             )
             return out
         except Exception as e:
-            logger.warning(
+            log_exception(
+                logger,
                 "BGE-M3 encode failed, fallback",
-                extra=merge_extra(
-                    stage="bge_embed",
-                    event="encode_error",
-                    count=n,
-                    error=str(e)[:200],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                ),
+                exc=e,
+                level=logging.WARNING,
+                stage="bge_embed",
+                event="encode_error",
+                count=n,
+                dim=dim,
+                batch_size=8,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
     out = _fallback_embed(texts, dim)
     logger.info(

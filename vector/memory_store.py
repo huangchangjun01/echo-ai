@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 from .vector_store import _WeaviateHttpClient
 
@@ -71,7 +71,16 @@ class MemoryVectorStore:
                 if self._http.add_property(self.class_name, prop):
                     logger.info("Added property %s to %s", prop["name"], self.class_name)
             except Exception as e:
-                logger.warning("Failed to add property %s: %s", prop["name"], e)
+                log_exception(
+                    logger,
+                    "add_property failed (skipped)",
+                    exc=e,
+                    level=logging.WARNING,
+                    stage="memory_schema",
+                    event="add_prop_error",
+                    class_name=self.class_name,
+                    prop_name=prop["name"],
+                )
 
     def add_texts(
         self,
@@ -146,14 +155,14 @@ class MemoryVectorStore:
             q_emb = embedding_fn([query_text])[0]
             embed_ms = round((time.perf_counter() - t0) * 1000, 2)
         except Exception as e:
-            logger.error(
+            log_exception(
+                logger,
                 "memory embedding_fn failed",
-                extra=merge_extra(
-                    stage="memory_vector_query",
-                    event="embed_error",
-                    tenant=tenant_id,
-                    error=str(e)[:200],
-                ),
+                exc=e,
+                stage="memory_vector_query",
+                event="embed_error",
+                tenant=tenant_id,
+                query_preview=(query_text or "")[:80],
             )
             raise ValueError("embedding_fn failed") from e
 
@@ -176,14 +185,15 @@ class MemoryVectorStore:
             http_ms = round((time.perf_counter() - t1) * 1000, 2)
             items = _extract_get_payload(payload, self.class_name)
         except Exception as e:
-            logger.error(
+            log_exception(
+                logger,
                 "memory query failed",
-                extra=merge_extra(
-                    stage="memory_vector_query",
-                    event="http_error",
-                    tenant=tenant_id,
-                    error=str(e)[:300],
-                ),
+                exc=e,
+                stage="memory_vector_query",
+                event="http_error",
+                tenant=tenant_id,
+                query_preview=(query_text or "")[:80],
+                http_ms=http_ms if 'http_ms' in locals() else None,
             )
             raise
 
@@ -208,7 +218,15 @@ class MemoryVectorStore:
             docs.append(item.get("text", ""))
             try:
                 meta = json.loads(item.get("metadata") or "{}")
-            except Exception:
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "metadata JSON parse failed (use empty)",
+                    exc=e,
+                    stage="memory_query_parse",
+                    event="meta_parse_error",
+                    item_id=item.get("id"),
+                )
                 meta = {}
             meta["similarity"] = round(similarity, 4)
             mds.append(meta)
@@ -248,8 +266,15 @@ class MemoryVectorStore:
     def close(self) -> None:
         try:
             self._http.close()
-        except Exception:
-            pass
+        except Exception as e:
+            log_silent_failure(
+                logger,
+                "close memory store HTTP client failed",
+                exc=e,
+                stage="memory_close",
+                event="client_close_error",
+                class_name=self.class_name,
+            )
 
 
 _singleton: MemoryVectorStore | None = None
@@ -271,6 +296,12 @@ def reset_memory_vector_store() -> None:
         if _singleton is not None:
             try:
                 _singleton.close()
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "reset_memory_store: close failed",
+                    exc=e,
+                    stage="memory_close",
+                    event="reset_error",
+                )
         _singleton = None

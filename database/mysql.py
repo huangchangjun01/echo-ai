@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +127,14 @@ async def close_pool() -> None:
         else:
             await asyncio.to_thread(_pool.close)
     except Exception as e:  # noqa: BLE001
-        logger.warning(
+        log_exception(
+            logger,
             "close pool failed",
-            extra=merge_extra(stage="db_pool", event="close_error", error=str(e)[:200]),
+            exc=e,
+            level=logging.WARNING,
+            stage="db_pool",
+            event="close_error",
+            backend="aiomysql" if _HAS_AIOMYSQL else "pymysql_threadpool",
         )
     finally:
         _pool = None
@@ -209,17 +214,17 @@ async def execute(sql: str, params: tuple | dict | None = None) -> int:
         return rowcount
     except Exception as e:
         elapsed = (time.perf_counter() - t0) * 1000.0
-        logger.exception(
+        log_exception(
+            logger,
             "db execute failed",
-            extra=merge_extra(
-                stage="db",
-                event="error",
-                op="execute",
-                sql=sql_summary,
-                params=param_count,
-                duration_ms=round(elapsed, 2),
-                error=str(e)[:300],
-            ),
+            exc=e,
+            level=logging.ERROR,
+            stage="db",
+            event="error",
+            op="execute",
+            sql=sql_summary,
+            params=param_count,
+            duration_ms=round(elapsed, 2),
         )
         raise
 
@@ -281,17 +286,17 @@ async def fetch_one(sql: str, params: tuple | dict | None = None) -> dict | None
         return row
     except Exception as e:
         elapsed = (time.perf_counter() - t0) * 1000.0
-        logger.exception(
+        log_exception(
+            logger,
             "db fetch_one failed",
-            extra=merge_extra(
-                stage="db",
-                event="error",
-                op="fetch_one",
-                sql=sql_summary,
-                params=param_count,
-                duration_ms=round(elapsed, 2),
-                error=str(e)[:300],
-            ),
+            exc=e,
+            level=logging.ERROR,
+            stage="db",
+            event="error",
+            op="fetch_one",
+            sql=sql_summary,
+            params=param_count,
+            duration_ms=round(elapsed, 2),
         )
         raise
 
@@ -353,17 +358,17 @@ async def fetch_all(sql: str, params: tuple | dict | None = None) -> list[dict]:
         return rows_dict
     except Exception as e:
         elapsed = (time.perf_counter() - t0) * 1000.0
-        logger.exception(
+        log_exception(
+            logger,
             "db fetch_all failed",
-            extra=merge_extra(
-                stage="db",
-                event="error",
-                op="fetch_all",
-                sql=sql_summary,
-                params=param_count,
-                duration_ms=round(elapsed, 2),
-                error=str(e)[:300],
-            ),
+            exc=e,
+            level=logging.ERROR,
+            stage="db",
+            event="error",
+            op="fetch_all",
+            sql=sql_summary,
+            params=param_count,
+            duration_ms=round(elapsed, 2),
         )
         raise
 
@@ -373,16 +378,29 @@ async def init_schema() -> None:
     from database.schema import ensure_schema
 
     t0 = time.perf_counter()
-    async with acquire() as conn:
-        if _HAS_AIOMYSQL and hasattr(conn, "cursor"):
-            async with conn.cursor() as cur:
-                await ensure_schema(cur)
-        else:
-            def _run() -> None:
-                with conn.cursor() as cur:  # type: ignore[attr-defined]
-                    ensure_schema(cur)
+    try:
+        async with acquire() as conn:
+            if _HAS_AIOMYSQL and hasattr(conn, "cursor"):
+                async with conn.cursor() as cur:
+                    await ensure_schema(cur)
+            else:
+                def _run() -> None:
+                    with conn.cursor() as cur:  # type: ignore[attr-defined]
+                        ensure_schema(cur)
 
-            await asyncio.to_thread(_run)
+                await asyncio.to_thread(_run)
+    except Exception as e:
+        log_exception(
+            logger,
+            "init_schema failed",
+            exc=e,
+            level=logging.ERROR,
+            stage="init_schema",
+            event="error",
+            db_name=get_settings().db.name,
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+        )
+        raise
     logger.info(
         "MySQL schema ensured",
         extra=merge_extra(
@@ -415,6 +433,12 @@ class _SyncPool:
         for c in self._opened:
             try:
                 c.close()
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "close pooled connection failed",
+                    exc=e,
+                    stage="db_close",
+                    event="conn_close_error",
+                )
         self._opened.clear()

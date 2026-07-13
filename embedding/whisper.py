@@ -16,7 +16,7 @@ import logging
 import time
 
 from config.config import get_settings
-from utils.request_context import merge_extra
+from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +54,25 @@ def _transcribe(audio_bytes: bytes) -> str:
         finally:
             try:
                 os.remove(tmp_path)
-            except Exception:
-                pass
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "whisper temp file cleanup failed (skip)",
+                    exc=e,
+                    stage="whisper_transcribe",
+                    event="tmp_cleanup_error",
+                    tmp_path=tmp_path,
+                )
     except Exception as e:
-        logger.warning("whisper transcribe failed: %s", e)
+        log_exception(
+            logger,
+            "whisper transcribe failed (return empty text)",
+            exc=e,
+            level=logging.WARNING,
+            stage="whisper_transcribe",
+            event="transcribe_error",
+            audio_bytes=len(audio_bytes or b""),
+        )
         return ""
 
 

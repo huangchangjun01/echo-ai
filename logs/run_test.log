@@ -1,0 +1,428 @@
+INFO:     Started server process [30220]
+INFO:     Waiting for application startup.
+2026-07-13 12:40:51.525  INFO    app.agent_runner [lifespan_start·start] taskName=Task-2 version=2.0.0 threshold=0.3 llm_model=MiniMax-M3 llm_base_url=https://api.minimaxi.com/v1 db_host=121.43.145.179 db_port=3306 db_name=huangchangjun weaviate_url=http://121.43.145.179:8080 weaviate_class=EchoDoc memory_class=EchoMemory small_model=MiniMax-M3 bge_model=BAAI/bge-m3 embed_model=OFA-Sys/chinese-clip-vit-base-patch16 embed_dim=512 bge_dim=1024 host=0.0.0.0 port=8000  "Echo-AI starting"
+2026-07-13 12:40:51.740  INFO    database.mysql  taskName=Task-2  "aiomysql pool created: 121.43.145.179:3306/huangchangjun"
+2026-07-13 12:40:51.740  INFO    database.mysql [db_pool·ok] taskName=Task-2 backend=aiomysql duration_ms=213.77  "mysql pool ready"
+2026-07-13 12:40:52.975  INFO    database.mysql [init_schema·ok] taskName=Task-2 duration_ms=1449.29  "MySQL schema ensured"
+2026-07-13 12:40:52.975  INFO    app.agent_runner [init_schema·ok] taskName=Task-2 duration_ms=1449.95  "MySQL schema ready"
+2026-07-13 12:40:52.976  INFO    app.agent_runner [bge_warmup·scheduled] taskName=Task-2  "BGE-M3 warmup scheduled"
+2026-07-13 12:40:52.976  INFO    app.agent_runner [lifespan_start·end] taskName=Task-2 ok=True  "Echo-AI agent ready"
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-07-13 12:40:53.366  INFO    embedding.bge_m3 [bge_load·start] model=BAAI/bge-m3 device=cpu  "loading BGE-M3"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-13 12:40:54.845  WARNING huggingface_hub.utils._http  "Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads."
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 37086.68it/s]INFO:     127.0.0.1:59777 - "GET /health HTTP/1.1" 200 OK
+2026-07-13 12:41:05.174  INFO    embedding.bge_m3 [bge_load·ok] model=BAAI/bge-m3 device=cpu duration_ms=12197.66  "BGE-M3 model loaded"
+2026-07-13 12:41:05.386  INFO    embedding.bge_m3 [bge_warmup·ok] device=cpu duration_ms=211.59  "BGE-M3 warmup done"
+2026-07-13 12:41:05.386  INFO    app.agent_runner [bge_warmup·ok] taskName=Task-4 duration_ms=12410.59  "BGE-M3 warmup done"
+2026-07-13 12:41:07.354  INFO    app.agent_runner  taskName=Task-10 stream=False msg_len=3 msg_preview=想看猫 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "/chat received"
+2026-07-13 12:41:07.354  INFO    biz.chat [chat_stream·start] taskName=Task-10 msg_len=3 msg_preview=想看猫 react_max_iter=3 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "chat_stream start"
+2026-07-13 12:41:07.354  INFO    llm.intent [intent_classify·rule_hit] taskName=Task-10 intent=image_search source=rule_image msg_preview=想看猫 duration_ms=0.0 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "intent classified (rule)"
+2026-07-13 12:41:07.354  INFO    biz.chat [chat_stream·react_decision] taskName=Task-10 intent=image_search intent_source=rule_image intent_ms=0.0 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react decision"
+2026-07-13 12:41:07.354  INFO    biz.chat [context_build·start] taskName=Task-10 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "building chat context"
+2026-07-13 12:41:07.354  INFO    memory.retriever [build_chat_context·start] taskName=Task-10 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "build_chat_context begin"
+2026-07-13 12:41:07.355  INFO    embedding.models [clip_load·start] model=OFA-Sys/chinese-clip-vit-base-patch16 device=cpu user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "loading Chinese-CLIP"
+2026-07-13 12:41:07.421  INFO    memory.retriever [persona·fallback_default] taskName=Task-11 user_id=000001 duration_ms=66.86 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "load_persona fallback"
+2026-07-13 12:41:07.592  WARNING database.mysql [db·slow] taskName=Task-13 op=fetch_all sql=SELECT id, level, content, summary, emotion_tag, emotion_intensity, created_at FROM memories WHERE user_id=%s AND level IN ('L1','L2') ORDER BY created_at DESC LIMIT %s params=2 rows=0 duration_ms=237.14 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "slow sql"
+2026-07-13 12:41:07.592  INFO    memory.retriever [memory_l1·ok] taskName=Task-13 user_id=000001 count=0 limit=8 duration_ms=237.48 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "load_l1_summaries ok"
+2026-07-13 12:41:07.631  WARNING database.mysql [db·slow] taskName=Task-12 op=fetch_all sql=SELECT id, content, memory_type AS category, vector_id, created_at, updated_at FROM memories WHERE user_id=%s AND level='L0' ORDER BY updated_at DESC LIMIT %s params=2 rows=0 duration_ms=276.71 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "slow sql"
+2026-07-13 12:41:07.632  INFO    memory.retriever [memory_l0·ok] taskName=Task-12 user_id=000001 count=0 limit=20 duration_ms=277.11 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "load_l0_memories ok"
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 29910.05it/s]
+[1mChineseCLIPModel LOAD REPORT[0m from: OFA-Sys/chinese-clip-vit-base-patch16
+Key                                  | Status     |  | 
+-------------------------------------+------------+--+-
+text_model.embeddings.position_ids   | UNEXPECTED |  | 
+vision_model.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+2026-07-13 12:41:14.597  INFO    embedding.models [clip_load·ok] model=OFA-Sys/chinese-clip-vit-base-patch16 device=cpu duration_ms=7241.83 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "Chinese-CLIP model loaded"
+2026-07-13 12:41:14.661  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=63.44 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "text embedding ok"
+2026-07-13 12:41:15.198  INFO    vector.vector_store  user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "Connected to Weaviate (REST) at http://121.43.145.179:8080"
+2026-07-13 12:41:15.941  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.4098 median_score=0.4098 cache_hit=False embed_ms=0.0 http_ms=291.28 duration_ms=291.95 query_preview=想看猫 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "vector query"
+2026-07-13 12:41:15.942  INFO    memory.retriever [memory_multimodal·ok] taskName=Task-14 user_id=000001 query_preview=想看猫 top_k=1 max_hits=1 hit_count=1 modality_counts={image=1} top_score=0.4098 duration_ms=8586.76 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "multimodal_search ok"
+2026-07-13 12:41:15.942  INFO    memory.retriever [build_chat_context·end] taskName=Task-10 ok=True duration_ms=8587.68 enable_multimodal=True l1_hit_count=1 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "build_chat_context ok"
+2026-07-13 12:41:15.942  INFO    biz.chat [context_build·end] taskName=Task-10 ok=True duration_ms=8587.82 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=1 intent=image_search user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "context_build ok"
+2026-07-13 12:41:15.942  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-10 intent=image_search intent_source=rule_image seed_len=4 system_len=1085 injected_l1_hint=True injected_tool_hint=True user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react seed ready"
+2026-07-13 12:41:20.597  INFO    llm.client [llm_chat·ok] taskName=Task-10 model=MiniMax-M3 msg_count=5 prompt_tokens=726 completion_tokens=149 total_tokens=875 choices=1 duration_ms=3629.27 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "LLM chat ok"
+2026-07-13 12:41:20.597  INFO    biz.chat [react_decision·ok] taskName=Task-10 iter=0 out_len=65 has_think=True duration_ms=3629.48 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react decision ok"
+2026-07-13 12:41:20.597  INFO    biz.chat [react_loop·dispatch] taskName=Task-10 iter=0 tool=search_memory args_summary={"query": "猫 cat", "top_k": 5, "user_id": "000001", "session_id": "t-1"} user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react iter dispatch"
+2026-07-13 12:41:20.597  INFO    tools [tool_search_memory·start] taskName=Task-10 args_summary={"query": "猫 cat", "top_k": 5, "user_id": "000001", "session_id": "t-1"} user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "tool.adispatch start"
+2026-07-13 12:41:20.650  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=51.57 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "text embedding ok"
+2026-07-13 12:41:20.706  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=108.61 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "BGE-M3 embed ok"
+2026-07-13 12:41:20.861  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.3918 median_score=0.3918 cache_hit=False embed_ms=0.0 http_ms=209.57 duration_ms=210.2 query_preview=猫 cat user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "vector query"
+2026-07-13 12:41:21.272  INFO    vector.memory_store  user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "MemoryVectorStore at http://121.43.145.179:8080 class=EchoMemory"
+2026-07-13 12:41:22.063  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=1 fetch_limit=20 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=443.26 duration_ms=443.93 query_preview=猫 cat user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "memory vector query"
+2026-07-13 12:41:22.064  INFO    tools [tool_search_memory·end] taskName=Task-10 ok=True duration_ms=1466.42 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "tool.adispatch ok"
+2026-07-13 12:41:22.064  INFO    biz.chat [react_loop·tool_ok] taskName=Task-10 iter=0 tool=search_memory ok=True duration_ms=1466.54 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react tool result"
+2026-07-13 12:41:23.981  INFO    llm.client [llm_chat·ok] taskName=Task-10 model=MiniMax-M3 msg_count=7 prompt_tokens=813 completion_tokens=105 total_tokens=918 choices=1 duration_ms=1917.41 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "LLM chat ok"
+2026-07-13 12:41:23.982  INFO    biz.chat [react_decision·ok] taskName=Task-10 iter=1 out_len=2 has_think=True duration_ms=1917.61 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react decision ok"
+2026-07-13 12:41:23.982  INFO    biz.chat [react_loop·no_tool] taskName=Task-10 iter=1 out_len=2 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react no tool call (hand off to cascade)"
+2026-07-13 12:41:23.982  INFO    biz.chat [react_loop·end] taskName=Task-10 tools_called=1 exhausted=False user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "react loop end"
+2026-07-13 12:41:23.982  INFO    llm.cascade [cascade·start] taskName=Task-10 msg_count=6 prefix_tokens=64 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "cascade start"
+2026-07-13 12:41:26.011  INFO    llm.client [small_prefix·ok] taskName=Task-10 model=MiniMax-M3 msg_count=6 out_len=310 duration_ms=2029.22 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "small_prefix ok"
+2026-07-13 12:41:26.011  INFO    llm.cascade [cascade·prefix] taskName=Task-10 prefix_len=0 duration_ms=2029.45 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "cascade prefix ready"
+2026-07-13 12:41:28.419  INFO    llm.client [llm_stream·end] taskName=Task-10 model=MiniMax-M3 msg_count=6 delta_count=9 out_chars=340 first_delta_ms=1454.74 duration_ms=2407.14 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "LLM stream end"
+2026-07-13 12:41:28.419  INFO    llm.cascade [cascade·stream] taskName=Task-10 prefix_kept=False skip_chars=0 raw_len=340 tail_len=102 delta_count=5 first_delta_ms=1797.03 big_model_ms=2407.46 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "cascade big model streamed"
+2026-07-13 12:41:28.419  INFO    llm.cascade [cascade·end] taskName=Task-10 final_len=102 delta_count=5 total_ms=4437.24 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "cascade end"
+2026-07-13 12:41:28.419  INFO    biz.chat [chat_stream·end] taskName=Task-10 final_len=215 tool_count=1 context_build_ms=21064.95 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "chat_stream end"
+2026-07-13 12:41:28.419  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-10 user_id=000001 session_id=t-1 user_msg_len=3 assistant_msg_len=215 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "extract_and_archive_async start"
+2026-07-13 12:41:34.152  INFO    llm.client [llm_chat·ok] taskName=Task-10 model=MiniMax-M3 msg_count=2 prompt_tokens=549 completion_tokens=330 total_tokens=879 choices=1 duration_ms=5598.24 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "LLM chat ok"
+2026-07-13 12:41:34.152  INFO    memory.extractor [llm_extract·ok] taskName=Task-10 count=2 raw_items=2 duration_ms=5598.53 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "llm_extract ok"
+2026-07-13 12:41:34.301  INFO    embedding.bge_m3 [bge_embed·ok] count=2 batch_size=8 fallback=False dim=1024 duration_ms=149.17 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "BGE-M3 embed ok"
+2026-07-13 12:41:34.655  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=351.91 duration_ms=352.62 query_preview=用户喜欢猫，想看猫咪相关的内容 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "memory vector query"
+2026-07-13 12:41:34.939  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=282.6 duration_ms=283.42 query_preview=用户资料库里目前没有猫咪图片，只有一张拉布拉多.jpg user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "memory vector query"
+2026-07-13 12:41:34.939  INFO    memory.extractor [extract_and_archive·dedup] taskName=Task-10 user_id=000001 extracted=2 kept=2 skipped=0 threshold=0.92 embed_ms=149.69 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "extract dedup summary"
+2026-07-13 12:41:35.079  INFO    embedding.bge_m3 [bge_embed·ok] count=2 batch_size=8 fallback=False dim=1024 duration_ms=139.52 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "BGE-M3 embed ok"
+2026-07-13 12:41:35.608  INFO    vector.memory_store [memory_vector_add·ok] class_name=EchoMemory count=2 http_ms=527.87 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "memory insert"
+2026-07-13 12:41:35.608  INFO    memory.extractor [vectorize_and_store·ok] taskName=Task-10 user_id=000001 count=2 embed_ms=140.08 write_ms=528.44 duration_ms=668.67 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "vectorize_and_store ok"
+2026-07-13 12:41:37.617  INFO    llm.client [llm_chat·ok] taskName=Task-10 model=MiniMax-M3 msg_count=2 prompt_tokens=229 completion_tokens=133 total_tokens=362 choices=1 duration_ms=2008.98 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "LLM chat ok"
+2026-07-13 12:41:37.618  INFO    memory.extractor [summarize·ok] taskName=Task-10 user_id=000001 input_count=2 out_len=54 duration_ms=2009.19 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "summarize ok"
+2026-07-13 12:41:37.831  INFO    memory.extractor [archive·summary_inserted] taskName=Task-10 user_id=000001 summary_id=0 summary_len=54 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "archive summary inserted"
+2026-07-13 12:41:38.244  INFO    memory.extractor [archive·end] taskName=Task-10 user_id=000001 inserted=0 relations=0 summary_id=0 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "archive done"
+2026-07-13 12:41:38.244  INFO    memory.extractor [extract_and_archive·end] taskName=Task-10 user_id=000001 extracted=2 kept=2 inserted=0 vector_stored=2 summary_len=54 duration_ms=9690.44 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "extract_and_archive done"
+2026-07-13 12:41:38.395  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-10 user_id=000001 inserted=0 summary_len=54 duration_ms=9976.05 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "memory extract done"
+2026-07-13 12:41:38.395  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-10 duration_ms=9976.26 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "memory extract (sync) ok"
+2026-07-13 12:41:38.395  INFO    app.agent_runner [-·end] taskName=Task-10 ok=True stream=False reply_len=215 reply_preview=抱歉，我在你的资料库里没找到猫咪相关的图片，只搜到了一张拉布拉多.jpg 😊 是狗狗哦，不是猫~  你现在想看的话，可以上传一张猫猫给我，我来陪你看！或者你告诉我喜欢什么风格/品种的猫，我可以和你聊聊~🐱  附件： ![拉布拉多.jpg]( events=13 chat_latency_ms=31041 duration_ms=31041.72 user_id=000001 session_id=t-1 request_id=5d88721e8f2a4ccabf75a1ba04be7506  "/chat done"
+INFO:     127.0.0.1:59788 - "POST /chat HTTP/1.1" 200 OK
+2026-07-13 12:41:52.245  INFO    app.agent_runner  taskName=Task-30 stream=False msg_len=3 msg_preview=想看猫 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "/chat received"
+2026-07-13 12:41:52.246  INFO    biz.chat [chat_stream·start] taskName=Task-30 msg_len=3 msg_preview=想看猫 react_max_iter=3 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "chat_stream start"
+2026-07-13 12:41:52.246  INFO    llm.intent [intent_classify·rule_hit] taskName=Task-30 intent=image_search source=rule_image msg_preview=想看猫 duration_ms=0.0 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "intent classified (rule)"
+2026-07-13 12:41:52.246  INFO    biz.chat [chat_stream·react_decision] taskName=Task-30 intent=image_search intent_source=rule_image intent_ms=0.0 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react decision"
+2026-07-13 12:41:52.246  INFO    biz.chat [context_build·start] taskName=Task-30 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "building chat context"
+2026-07-13 12:41:52.246  INFO    memory.retriever [build_chat_context·start] taskName=Task-30 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "build_chat_context begin"
+2026-07-13 12:41:52.275  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=28.64 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "text embedding ok"
+2026-07-13 12:41:52.276  INFO    vector.vector_store [vector_query·cache_hit] class_name=EchoDoc n_results=1 tenant=000001 query_preview=想看猫 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "vector query cache hit"
+2026-07-13 12:41:52.276  INFO    memory.retriever [memory_multimodal·ok] taskName=Task-34 user_id=000001 query_preview=想看猫 top_k=1 max_hits=1 hit_count=1 modality_counts={image=1} top_score=0.4098 duration_ms=29.63 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "multimodal_search ok"
+2026-07-13 12:41:52.341  INFO    memory.retriever [persona·fallback_default] taskName=Task-31 user_id=000001 duration_ms=95.37 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "load_persona fallback"
+2026-07-13 12:41:52.399  INFO    memory.retriever [memory_l0·ok] taskName=Task-32 user_id=000001 count=1 limit=20 duration_ms=153.07 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "load_l0_memories ok"
+2026-07-13 12:41:52.678  WARNING database.mysql [db·slow] taskName=Task-33 op=fetch_all sql=SELECT id, level, content, summary, emotion_tag, emotion_intensity, created_at FROM memories WHERE user_id=%s AND level IN ('L1','L2') ORDER BY created_at DESC LIMIT %s params=2 rows=2 duration_ms=431.47 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "slow sql"
+2026-07-13 12:41:52.678  INFO    memory.retriever [memory_l1·ok] taskName=Task-33 user_id=000001 count=2 limit=8 duration_ms=431.76 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "load_l1_summaries ok"
+2026-07-13 12:41:52.678  INFO    memory.retriever [build_chat_context·end] taskName=Task-30 ok=True duration_ms=432.26 enable_multimodal=True l1_hit_count=1 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "build_chat_context ok"
+2026-07-13 12:41:52.678  INFO    biz.chat [context_build·end] taskName=Task-30 ok=True duration_ms=432.41 persona_len=106 l0_count=1 l1_summary_count=2 l1_hit_count=1 l0_preview=用户喜欢猫，想看猫咪相关的内容 intent=image_search user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "context_build ok"
+2026-07-13 12:41:52.678  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-30 intent=image_search intent_source=rule_image seed_len=4 system_len=1190 injected_l1_hint=True injected_tool_hint=True user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react seed ready"
+2026-07-13 12:41:54.578  INFO    llm.client [llm_chat·ok] taskName=Task-30 model=MiniMax-M3 msg_count=5 prompt_tokens=783 completion_tokens=73 total_tokens=856 choices=1 duration_ms=1899.63 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM chat ok"
+2026-07-13 12:41:54.578  INFO    biz.chat [react_decision·ok] taskName=Task-30 iter=0 out_len=61 has_think=True duration_ms=1899.85 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react decision ok"
+2026-07-13 12:41:54.578  INFO    biz.chat [react_loop·dispatch] taskName=Task-30 iter=0 tool=search_memory args_summary={"query": "猫", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react iter dispatch"
+2026-07-13 12:41:54.579  INFO    tools [tool_search_memory·start] taskName=Task-30 args_summary={"query": "猫", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "tool.adispatch start"
+2026-07-13 12:41:54.638  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=59.2 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "text embedding ok"
+2026-07-13 12:41:54.688  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=109.3 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "BGE-M3 embed ok"
+2026-07-13 12:41:54.854  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.402 median_score=0.402 cache_hit=False embed_ms=0.0 http_ms=214.76 duration_ms=215.4 query_preview=猫 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "vector query"
+2026-07-13 12:41:54.971  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=1 fetch_limit=20 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.7242 median_score=0.7242 embed_ms=0.0 http_ms=280.8 duration_ms=281.85 query_preview=猫 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory vector query"
+2026-07-13 12:41:55.040  INFO    tools [tool_search_memory·end] taskName=Task-30 ok=True duration_ms=461.52 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "tool.adispatch ok"
+2026-07-13 12:41:55.040  INFO    biz.chat [react_loop·tool_ok] taskName=Task-30 iter=0 tool=search_memory ok=True duration_ms=461.71 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react tool result"
+2026-07-13 12:41:57.315  INFO    llm.client [llm_chat·ok] taskName=Task-30 model=MiniMax-M3 msg_count=7 prompt_tokens=846 completion_tokens=86 total_tokens=932 choices=1 duration_ms=2274.38 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM chat ok"
+2026-07-13 12:41:57.315  INFO    biz.chat [react_decision·ok] taskName=Task-30 iter=1 out_len=74 has_think=True duration_ms=2274.57 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react decision ok"
+2026-07-13 12:41:57.315  INFO    biz.chat [react_loop·dispatch] taskName=Task-30 iter=1 tool=search_memory args_summary={"query": "猫 cat 图片 image", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react iter dispatch"
+2026-07-13 12:41:57.315  INFO    tools [tool_search_memory·start] taskName=Task-30 args_summary={"query": "猫 cat 图片 image", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "tool.adispatch start"
+2026-07-13 12:41:57.381  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=65.33 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "text embedding ok"
+2026-07-13 12:41:57.439  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=123.05 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "BGE-M3 embed ok"
+2026-07-13 12:41:57.611  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.3931 median_score=0.3931 cache_hit=False embed_ms=0.0 http_ms=229.06 duration_ms=229.67 query_preview=猫 cat 图片 image user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "vector query"
+2026-07-13 12:41:57.868  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=1 fetch_limit=20 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=427.57 duration_ms=428.7 query_preview=猫 cat 图片 image user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory vector query"
+2026-07-13 12:41:57.869  INFO    tools [tool_search_memory·end] taskName=Task-30 ok=True duration_ms=553.61 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "tool.adispatch ok"
+2026-07-13 12:41:57.869  INFO    biz.chat [react_loop·tool_ok] taskName=Task-30 iter=1 tool=search_memory ok=True duration_ms=553.74 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react tool result"
+2026-07-13 12:42:01.252  INFO    llm.client [llm_chat·ok] taskName=Task-30 model=MiniMax-M3 msg_count=9 prompt_tokens=933 completion_tokens=90 total_tokens=1023 choices=1 duration_ms=3382.99 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM chat ok"
+2026-07-13 12:42:01.252  INFO    biz.chat [react_decision·ok] taskName=Task-30 iter=2 out_len=2 has_think=True duration_ms=3383.28 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react decision ok"
+2026-07-13 12:42:01.252  INFO    biz.chat [react_loop·no_tool] taskName=Task-30 iter=2 out_len=2 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react no tool call (hand off to cascade)"
+2026-07-13 12:42:01.252  INFO    biz.chat [react_loop·end] taskName=Task-30 tools_called=2 exhausted=False user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "react loop end"
+2026-07-13 12:42:01.253  INFO    llm.cascade [cascade·start] taskName=Task-30 msg_count=8 prefix_tokens=64 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "cascade start"
+2026-07-13 12:42:03.344  INFO    llm.client [small_prefix·ok] taskName=Task-30 model=MiniMax-M3 msg_count=8 out_len=279 duration_ms=2091.42 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "small_prefix ok"
+2026-07-13 12:42:03.344  INFO    llm.cascade [cascade·prefix] taskName=Task-30 prefix_len=0 duration_ms=2091.74 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "cascade prefix ready"
+2026-07-13 12:42:06.413  INFO    llm.client [llm_stream·end] taskName=Task-30 model=MiniMax-M3 msg_count=8 delta_count=8 out_chars=390 first_delta_ms=1969.58 duration_ms=3068.37 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM stream end"
+2026-07-13 12:42:06.413  INFO    llm.cascade [cascade·stream] taskName=Task-30 prefix_kept=False skip_chars=0 raw_len=390 tail_len=103 delta_count=5 first_delta_ms=2065.75 big_model_ms=3068.67 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "cascade big model streamed"
+2026-07-13 12:42:06.413  INFO    llm.cascade [cascade·end] taskName=Task-30 final_len=103 delta_count=5 total_ms=5160.69 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "cascade end"
+2026-07-13 12:42:06.413  INFO    biz.chat [chat_stream·end] taskName=Task-30 final_len=216 tool_count=2 context_build_ms=14167.46 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "chat_stream end"
+2026-07-13 12:42:06.413  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-30 user_id=000001 session_id=t-image user_msg_len=3 assistant_msg_len=216 request_id=e035097c4ed242418192064bc0cf1477  "extract_and_archive_async start"
+2026-07-13 12:42:13.014  INFO    llm.client [llm_chat·ok] taskName=Task-30 model=MiniMax-M3 msg_count=2 prompt_tokens=555 completion_tokens=558 total_tokens=1113 choices=1 duration_ms=6360.63 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM chat ok"
+2026-07-13 12:42:13.014  INFO    memory.extractor [llm_extract·ok] taskName=Task-30 count=4 raw_items=4 duration_ms=6360.95 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "llm_extract ok"
+2026-07-13 12:42:13.206  INFO    embedding.bge_m3 [bge_embed·ok] count=4 batch_size=8 fallback=False dim=1024 duration_ms=191.99 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "BGE-M3 embed ok"
+2026-07-13 12:42:13.605  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.8432 median_score=0.8432 embed_ms=0.0 http_ms=395.96 duration_ms=396.96 query_preview=用户非常喜欢猫 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory vector query"
+2026-07-13 12:42:14.049  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.9665 median_score=0.9665 embed_ms=0.0 http_ms=443.23 duration_ms=443.95 query_preview=用户当前图片库中没有猫咪图片，只有一张拉布拉多的照片 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory vector query"
+2026-07-13 12:42:16.859  INFO    llm.client [llm_chat·ok] taskName=Task-30 model=MiniMax-M3 msg_count=2 prompt_tokens=282 completion_tokens=58 total_tokens=340 choices=1 duration_ms=2808.99 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM chat ok"
+2026-07-13 12:42:16.859  INFO    memory.extractor [dedup_one·llm_decision] taskName=Task-30 user_id=000001 duplicate=True top_sim=0.9665 threshold=0.92 duration_ms=3254.12 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "dedup_one llm"
+2026-07-13 12:42:17.504  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.8494 median_score=0.8494 embed_ms=0.0 http_ms=643.67 duration_ms=644.78 query_preview=用户表达了想看猫的意愿 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory vector query"
+2026-07-13 12:42:18.009  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.7009 median_score=0.7009 embed_ms=0.0 http_ms=502.95 duration_ms=503.69 query_preview=助手建议用户上传猫咪图片以便收藏和记忆，方便下次查看 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory vector query"
+2026-07-13 12:42:18.009  INFO    memory.extractor [extract_and_archive·dedup] taskName=Task-30 user_id=000001 extracted=4 kept=3 skipped=1 threshold=0.92 embed_ms=193.6 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "extract dedup summary"
+2026-07-13 12:42:18.172  INFO    embedding.bge_m3 [bge_embed·ok] count=3 batch_size=8 fallback=False dim=1024 duration_ms=162.65 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "BGE-M3 embed ok"
+2026-07-13 12:42:18.637  INFO    vector.memory_store [memory_vector_add·ok] class_name=EchoMemory count=3 http_ms=463.84 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory insert"
+2026-07-13 12:42:18.637  INFO    memory.extractor [vectorize_and_store·ok] taskName=Task-30 user_id=000001 count=3 embed_ms=163.14 write_ms=464.45 duration_ms=627.76 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "vectorize_and_store ok"
+2026-07-13 12:42:20.594  INFO    llm.client [llm_chat·ok] taskName=Task-30 model=MiniMax-M3 msg_count=2 prompt_tokens=233 completion_tokens=67 total_tokens=300 choices=1 duration_ms=1956.23 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "LLM chat ok"
+2026-07-13 12:42:20.594  INFO    memory.extractor [summarize·ok] taskName=Task-30 user_id=000001 input_count=3 out_len=43 duration_ms=1956.46 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "summarize ok"
+2026-07-13 12:42:20.808  WARNING database.mysql [db·slow] taskName=Task-30 op=execute sql=INSERT INTO memories (user_id, level, content, summary, emotion_tag, emotion_intensity, importance) VALUES (%s, 'L2', %s, %s, 'neutral', 0.0, 0.7) params=3 rowcount=1 duration_ms=214.17 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "slow sql"
+2026-07-13 12:42:21.068  WARNING database.mysql [db·slow] taskName=Task-30 op=fetch_one sql=SELECT LAST_INSERT_ID() AS id params=0 rows=1 duration_ms=259.07 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "slow sql"
+2026-07-13 12:42:21.068  INFO    memory.extractor [archive·summary_inserted] taskName=Task-30 user_id=000001 summary_id=177 summary_len=43 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "archive summary inserted"
+2026-07-13 12:42:21.309  WARNING database.mysql [db·slow] taskName=Task-30 op=execute sql=INSERT INTO memories (user_id, level, content, summary, emotion_tag, emotion_intensity, vector_id, parent_id, importance, memory_type, category, embedding_dim) VALUES (%s, %s, %s, %s, %s, %s, %s, %... params=12 rowcount=1 duration_ms=241.49 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "slow sql"
+2026-07-13 12:42:21.792  WARNING database.mysql [db·slow] taskName=Task-30 op=execute sql=INSERT INTO memories (user_id, level, content, summary, emotion_tag, emotion_intensity, vector_id, parent_id, importance, memory_type, category, embedding_dim) VALUES (%s, %s, %s, %s, %s, %s, %s, %... params=12 rowcount=1 duration_ms=309.41 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "slow sql"
+2026-07-13 12:42:22.103  INFO    memory.extractor [archive·end] taskName=Task-30 user_id=000001 inserted=3 relations=0 summary_id=177 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "archive done"
+2026-07-13 12:42:22.103  INFO    memory.extractor [extract_and_archive·end] taskName=Task-30 user_id=000001 extracted=4 kept=3 inserted=3 vector_stored=3 summary_len=43 duration_ms=15450.4 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "extract_and_archive done"
+2026-07-13 12:42:22.230  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-30 user_id=000001 inserted=3 summary_len=43 duration_ms=15816.48 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory extract done"
+2026-07-13 12:42:22.230  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-30 duration_ms=15816.72 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "memory extract (sync) ok"
+2026-07-13 12:42:22.230  INFO    app.agent_runner [-·end] taskName=Task-30 ok=True stream=False reply_len=216 reply_preview=哈哈，我记得你超喜欢猫的～不过我刚才翻了翻你的资料库，目前里面还没有猫咪图片，只有一张拉布拉多的照片（[拉布拉多.jpg]）。要不你上传几张猫猫给我？我就能帮你收藏和记忆啦，下次你想看的时候随时找我就行 🐱  附件： ![拉布拉多.jpg] events=14 chat_latency_ms=29984 duration_ms=29984.73 user_id=000001 session_id=t-image request_id=e035097c4ed242418192064bc0cf1477  "/chat done"
+INFO:     127.0.0.1:53206 - "POST /chat HTTP/1.1" 200 OK
+2026-07-13 12:42:22.748  INFO    app.agent_runner  taskName=Task-55 stream=False msg_len=7 msg_preview=给我看山的照片 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "/chat received"
+2026-07-13 12:42:22.748  INFO    biz.chat [chat_stream·start] taskName=Task-55 msg_len=7 msg_preview=给我看山的照片 react_max_iter=3 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "chat_stream start"
+2026-07-13 12:42:22.748  INFO    llm.intent [intent_classify·rule_hit] taskName=Task-55 intent=image_search source=rule_image msg_preview=给我看山的照片 duration_ms=0.0 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "intent classified (rule)"
+2026-07-13 12:42:22.748  INFO    biz.chat [chat_stream·react_decision] taskName=Task-55 intent=image_search intent_source=rule_image intent_ms=0.0 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react decision"
+2026-07-13 12:42:22.749  INFO    biz.chat [context_build·start] taskName=Task-55 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "building chat context"
+2026-07-13 12:42:22.749  INFO    memory.retriever [build_chat_context·start] taskName=Task-55 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "build_chat_context begin"
+2026-07-13 12:42:22.787  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=37.81 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "text embedding ok"
+2026-07-13 12:42:22.883  INFO    memory.retriever [memory_l0·ok] taskName=Task-57 user_id=000001 count=2 limit=20 duration_ms=134.53 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "load_l0_memories ok"
+2026-07-13 12:42:22.884  INFO    memory.retriever [persona·fallback_default] taskName=Task-56 user_id=000001 duration_ms=134.99 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "load_persona fallback"
+2026-07-13 12:42:22.892  INFO    memory.retriever [memory_l1·ok] taskName=Task-58 user_id=000001 count=5 limit=8 duration_ms=142.85 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "load_l1_summaries ok"
+2026-07-13 12:42:23.031  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.3649 median_score=0.3649 cache_hit=False embed_ms=0.0 http_ms=243.01 duration_ms=243.54 query_preview=给我看山的照片 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "vector query"
+2026-07-13 12:42:23.032  INFO    memory.retriever [memory_multimodal·ok] taskName=Task-59 user_id=000001 query_preview=给我看山的照片 top_k=1 max_hits=1 hit_count=1 modality_counts={image=1} top_score=0.3649 duration_ms=282.75 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "multimodal_search ok"
+2026-07-13 12:42:23.032  INFO    memory.retriever [build_chat_context·end] taskName=Task-55 ok=True duration_ms=283.36 enable_multimodal=True l1_hit_count=1 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "build_chat_context ok"
+2026-07-13 12:42:23.032  INFO    biz.chat [context_build·end] taskName=Task-55 ok=True duration_ms=283.55 persona_len=106 l0_count=2 l1_summary_count=5 l1_hit_count=1 l0_preview=用户非常喜欢猫 | 用户喜欢猫，想看猫咪相关的内容 intent=image_search user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "context_build ok"
+2026-07-13 12:42:23.032  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-55 intent=image_search intent_source=rule_image seed_len=4 system_len=1304 injected_l1_hint=True injected_tool_hint=True user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react seed ready"
+2026-07-13 12:42:25.894  INFO    llm.client [llm_chat·ok] taskName=Task-55 model=MiniMax-M3 msg_count=5 prompt_tokens=850 completion_tokens=49 total_tokens=899 choices=1 duration_ms=2862.0 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "LLM chat ok"
+2026-07-13 12:42:25.894  INFO    biz.chat [react_decision·ok] taskName=Task-55 iter=0 out_len=70 has_think=True duration_ms=2862.19 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react decision ok"
+2026-07-13 12:42:25.895  INFO    biz.chat [react_loop·dispatch] taskName=Task-55 iter=0 tool=search_memory args_summary={"query": "山 mountain", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react iter dispatch"
+2026-07-13 12:42:25.895  INFO    tools [tool_search_memory·start] taskName=Task-55 args_summary={"query": "山 mountain", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "tool.adispatch start"
+2026-07-13 12:42:25.953  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=57.5 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "text embedding ok"
+2026-07-13 12:42:26.002  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=107.53 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "BGE-M3 embed ok"
+2026-07-13 12:42:26.336  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.3378 median_score=0.3378 cache_hit=False embed_ms=0.0 http_ms=381.38 duration_ms=381.99 query_preview=山 mountain user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "vector query"
+2026-07-13 12:42:26.432  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=1 fetch_limit=20 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=427.63 duration_ms=428.65 query_preview=山 mountain user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "memory vector query"
+2026-07-13 12:42:26.432  INFO    tools [tool_search_memory·end] taskName=Task-55 ok=True duration_ms=537.43 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "tool.adispatch ok"
+2026-07-13 12:42:26.432  INFO    biz.chat [react_loop·tool_ok] taskName=Task-55 iter=0 tool=search_memory ok=True duration_ms=537.59 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react tool result"
+2026-07-13 12:42:28.368  INFO    llm.client [llm_chat·ok] taskName=Task-55 model=MiniMax-M3 msg_count=7 prompt_tokens=937 completion_tokens=90 total_tokens=1027 choices=1 duration_ms=1935.54 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "LLM chat ok"
+2026-07-13 12:42:28.368  INFO    biz.chat [react_decision·ok] taskName=Task-55 iter=1 out_len=2 has_think=True duration_ms=1935.77 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react decision ok"
+2026-07-13 12:42:28.368  INFO    biz.chat [react_loop·no_tool] taskName=Task-55 iter=1 out_len=2 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react no tool call (hand off to cascade)"
+2026-07-13 12:42:28.368  INFO    biz.chat [react_loop·end] taskName=Task-55 tools_called=1 exhausted=False user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "react loop end"
+2026-07-13 12:42:28.368  INFO    llm.cascade [cascade·start] taskName=Task-55 msg_count=6 prefix_tokens=64 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "cascade start"
+2026-07-13 12:42:30.597  INFO    llm.client [small_prefix·ok] taskName=Task-55 model=MiniMax-M3 msg_count=6 out_len=287 duration_ms=2228.23 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "small_prefix ok"
+2026-07-13 12:42:30.597  INFO    llm.cascade [cascade·prefix] taskName=Task-55 prefix_len=0 duration_ms=2228.42 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "cascade prefix ready"
+2026-07-13 12:42:32.739  INFO    llm.client [llm_stream·end] taskName=Task-55 model=MiniMax-M3 msg_count=6 delta_count=10 out_chars=377 first_delta_ms=1186.37 duration_ms=2141.65 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "LLM stream end"
+2026-07-13 12:42:32.739  INFO    llm.cascade [cascade·stream] taskName=Task-55 prefix_kept=False skip_chars=0 raw_len=377 tail_len=102 delta_count=5 first_delta_ms=1560.4 big_model_ms=2141.89 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "cascade big model streamed"
+2026-07-13 12:42:32.739  INFO    llm.cascade [cascade·end] taskName=Task-55 final_len=102 delta_count=5 total_ms=4370.55 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "cascade end"
+2026-07-13 12:42:32.739  INFO    biz.chat [chat_stream·end] taskName=Task-55 final_len=323 tool_count=1 context_build_ms=9990.48 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "chat_stream end"
+2026-07-13 12:42:32.739  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-55 user_id=000001 session_id=t-image user_msg_len=7 assistant_msg_len=323 request_id=e7a6f1363590402cbaf7598bd75fbb74  "extract_and_archive_async start"
+2026-07-13 12:42:41.261  INFO    llm.client [llm_chat·ok] taskName=Task-55 model=MiniMax-M3 msg_count=2 prompt_tokens=597 completion_tokens=600 total_tokens=1197 choices=1 duration_ms=8352.13 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "LLM chat ok"
+2026-07-13 12:42:41.262  INFO    memory.extractor [llm_extract·empty] taskName=Task-55 raw_preview=<think>The user is asking me to extract memories from a conversation. Let me analyze the conversation:  1. User asks to  duration_ms=8352.76 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "llm_extract empty list"
+2026-07-13 12:42:41.262  INFO    memory.extractor [extract_and_archive·empty] taskName=Task-55 user_id=000001 duration_ms=8352.95 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "extract_and_archive skip (no items)"
+2026-07-13 12:42:41.345  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-55 user_id=000001 inserted=0 summary_len=0 duration_ms=8605.97 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "memory extract done"
+2026-07-13 12:42:41.345  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-55 duration_ms=8606.18 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "memory extract (sync) ok"
+2026-07-13 12:42:41.345  INFO    app.agent_runner [-·end] taskName=Task-55 ok=True stream=False reply_len=323 reply_preview=抱歉呀，我在你的资料库里没有找到山的照片呢。目前库里的图片只有一张拉布拉多.jpg，并不是山的图片。  如果你有山的照片想要随时查看，可以上传给我，我可以帮你记住，这样下次你想看的时候就能直接找到啦 🏔️  附件： ![我的照片.jpg]( events=13 chat_latency_ms=18597 duration_ms=18597.24 user_id=000001 session_id=t-image request_id=e7a6f1363590402cbaf7598bd75fbb74  "/chat done"
+INFO:     127.0.0.1:53257 - "POST /chat HTTP/1.1" 200 OK
+2026-07-13 12:42:41.864  INFO    app.agent_runner  taskName=Task-69 stream=False msg_len=19 msg_preview=我之前上传过一张猫的照片，能再看看吗？ user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "/chat received"
+2026-07-13 12:42:41.864  INFO    biz.chat [chat_stream·start] taskName=Task-69 msg_len=19 msg_preview=我之前上传过一张猫的照片，能再看看吗？ react_max_iter=3 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "chat_stream start"
+2026-07-13 12:42:44.049  INFO    llm.client [small_prefix·ok] taskName=Task-69 model=MiniMax-M3 msg_count=2 out_len=144 duration_ms=2184.86 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "small_prefix ok"
+2026-07-13 12:42:44.049  INFO    llm.intent [intent_classify·ok] taskName=Task-69 intent=image_search msg_preview=我之前上传过一张猫的照片，能再看看吗？ duration_ms=2185.06 llm_raw_preview=<think>The user wants to see a cat photo they uploaded before. Clear visual requ user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "intent classified"
+2026-07-13 12:42:44.049  INFO    biz.chat [chat_stream·react_decision] taskName=Task-69 intent=image_search intent_source=llm intent_ms=2185.06 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react decision"
+2026-07-13 12:42:44.049  INFO    biz.chat [context_build·start] taskName=Task-69 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "building chat context"
+2026-07-13 12:42:44.049  INFO    memory.retriever [build_chat_context·start] taskName=Task-69 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "build_chat_context begin"
+2026-07-13 12:42:44.091  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=41.17 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "text embedding ok"
+2026-07-13 12:42:44.168  INFO    memory.retriever [persona·fallback_default] taskName=Task-70 user_id=000001 duration_ms=118.33 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "load_persona fallback"
+2026-07-13 12:42:44.218  INFO    memory.retriever [memory_l1·ok] taskName=Task-72 user_id=000001 count=5 limit=8 duration_ms=168.3 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "load_l1_summaries ok"
+2026-07-13 12:42:44.218  INFO    memory.retriever [memory_l0·ok] taskName=Task-71 user_id=000001 count=2 limit=20 duration_ms=168.72 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "load_l0_memories ok"
+2026-07-13 12:42:44.298  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.3681 median_score=0.3681 cache_hit=False embed_ms=0.0 http_ms=205.52 duration_ms=206.21 query_preview=我之前上传过一张猫的照片，能再看看吗？ user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "vector query"
+2026-07-13 12:42:44.298  INFO    memory.retriever [memory_multimodal·ok] taskName=Task-73 user_id=000001 query_preview=我之前上传过一张猫的照片，能再看看吗？ top_k=1 max_hits=1 hit_count=1 modality_counts={image=1} top_score=0.3681 duration_ms=248.47 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "multimodal_search ok"
+2026-07-13 12:42:44.298  INFO    memory.retriever [build_chat_context·end] taskName=Task-69 ok=True duration_ms=249.03 enable_multimodal=True l1_hit_count=1 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "build_chat_context ok"
+2026-07-13 12:42:44.299  INFO    biz.chat [context_build·end] taskName=Task-69 ok=True duration_ms=249.17 persona_len=106 l0_count=2 l1_summary_count=5 l1_hit_count=1 l0_preview=用户非常喜欢猫 | 用户喜欢猫，想看猫咪相关的内容 intent=image_search user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "context_build ok"
+2026-07-13 12:42:44.299  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-69 intent=image_search intent_source=llm seed_len=4 system_len=1304 injected_l1_hint=True injected_tool_hint=True user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react seed ready"
+2026-07-13 12:42:45.755  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=5 prompt_tokens=860 completion_tokens=75 total_tokens=935 choices=1 duration_ms=1455.8 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:42:45.755  INFO    biz.chat [react_decision·ok] taskName=Task-69 iter=0 out_len=76 has_think=True duration_ms=1456.01 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react decision ok"
+2026-07-13 12:42:45.755  INFO    biz.chat [react_loop·dispatch] taskName=Task-69 iter=0 tool=search_memory args_summary={"query": "猫 猫咪 photo image", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react iter dispatch"
+2026-07-13 12:42:45.755  INFO    tools [tool_search_memory·start] taskName=Task-69 args_summary={"query": "猫 猫咪 photo image", "top_k": 8, "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "tool.adispatch start"
+2026-07-13 12:42:45.813  INFO    embedding.models [clip_text·ok] count=1 dim=512 device=cpu duration_ms=57.71 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "text embedding ok"
+2026-07-13 12:42:45.878  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=122.22 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "BGE-M3 embed ok"
+2026-07-13 12:42:45.996  INFO    vector.vector_store [vector_query·ok] class_name=EchoDoc tenant=000001 n_results=1 fetch_limit=20 threshold=0.25 raw_hits=5 final_hits=1 top_score=0.4089 median_score=0.4089 cache_hit=False embed_ms=0.0 http_ms=181.84 duration_ms=182.48 query_preview=猫 猫咪 photo image user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "vector query"
+2026-07-13 12:42:46.292  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=1 fetch_limit=20 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=412.82 duration_ms=413.86 query_preview=猫 猫咪 photo image user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory vector query"
+2026-07-13 12:42:46.293  INFO    tools [tool_search_memory·end] taskName=Task-69 ok=True duration_ms=537.76 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "tool.adispatch ok"
+2026-07-13 12:42:46.293  INFO    biz.chat [react_loop·tool_ok] taskName=Task-69 iter=0 tool=search_memory ok=True duration_ms=537.94 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react tool result"
+2026-07-13 12:42:51.679  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=7 prompt_tokens=947 completion_tokens=157 total_tokens=1104 choices=1 duration_ms=5386.38 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:42:51.680  INFO    biz.chat [react_decision·ok] taskName=Task-69 iter=1 out_len=141 has_think=True duration_ms=5386.8 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react decision ok"
+2026-07-13 12:42:51.680  INFO    biz.chat [react_loop·dispatch] taskName=Task-69 iter=1 tool=understand_image args_summary={"image_url": "tfpdkiq9g.hn-bkt.clouddn.com/default/20260619/98a40c59-15e9-45ef-aca3-ab12843ff90a.jpg", "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react iter dispatch"
+2026-07-13 12:42:51.680  INFO    tools [tool_understand_image·start] taskName=Task-69 args_summary={"image_url": "tfpdkiq9g.hn-bkt.clouddn.com/default/20260619/98a40c59-15e9-45ef-aca3-ab12843ff90a.jpg", "user_id": "000001", "session_id": "t-image"} user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "tool.adispatch start"
+2026-07-13 12:42:52.191  WARNING tools.understand_image [understand_image·image_clip_error] taskName=Task-69 image_url=tfpdkiq9g.hn-bkt.clouddn.com/default/20260619/98a40c59-15e9-45ef-aca3-ab12843ff90a.jpg error_type=UnsupportedProtocol error_msg=Request URL is missing an 'http://' or 'https://' protocol. error_module=httpx error_class=httpx.UnsupportedProtocol user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "image download/clip failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "E:\Python\Python313\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\httpcore\_async\connection_pool.py", line 207, in handle_async_request
+    raise UnsupportedProtocol(
+        "Request URL is missing an 'http://' or 'https://' protocol."
+    )
+httpcore.UnsupportedProtocol: Request URL is missing an 'http://' or 'https://' protocol.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\tools\understand_image.py", line 57, in _understand_image_async
+    resp = await client.get(image_url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_client.py", line 1768, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.UnsupportedProtocol: Request URL is missing an 'http://' or 'https://' protocol.--- end ---
+2026-07-13 12:42:54.516  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=2 prompt_tokens=241 completion_tokens=97 total_tokens=338 choices=1 duration_ms=2261.05 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:42:54.516  INFO    tools [tool_understand_image·end] taskName=Task-69 ok=True duration_ms=2835.96 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "tool.adispatch ok"
+2026-07-13 12:42:54.516  INFO    biz.chat [react_loop·tool_ok] taskName=Task-69 iter=1 tool=understand_image ok=True duration_ms=2836.04 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react tool result"
+2026-07-13 12:42:57.336  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=9 prompt_tokens=1066 completion_tokens=130 total_tokens=1196 choices=1 duration_ms=2820.3 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:42:57.337  INFO    biz.chat [react_decision·ok] taskName=Task-69 iter=2 out_len=111 has_think=True duration_ms=2820.56 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react decision ok"
+2026-07-13 12:42:57.337  INFO    biz.chat [react_loop·no_tool] taskName=Task-69 iter=2 out_len=111 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react no tool call (hand off to cascade)"
+2026-07-13 12:42:57.337  INFO    biz.chat [react_loop·end] taskName=Task-69 tools_called=2 exhausted=False user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "react loop end"
+2026-07-13 12:42:57.337  INFO    llm.cascade [cascade·start] taskName=Task-69 msg_count=8 prefix_tokens=64 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "cascade start"
+2026-07-13 12:42:59.737  INFO    llm.client [small_prefix·ok] taskName=Task-69 model=MiniMax-M3 msg_count=8 out_len=108 duration_ms=2399.61 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "small_prefix ok"
+2026-07-13 12:42:59.737  INFO    llm.cascade [cascade·prefix] taskName=Task-69 prefix_len=108 duration_ms=2399.82 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "cascade prefix ready"
+2026-07-13 12:43:01.768  INFO    llm.client [llm_stream·end] taskName=Task-69 model=MiniMax-M3 msg_count=10 delta_count=2 out_chars=34 first_delta_ms=1756.34 duration_ms=2030.88 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM stream end"
+2026-07-13 12:43:01.768  INFO    llm.cascade [cascade·stream] taskName=Task-69 prefix_kept=True skip_chars=0 raw_len=34 tail_len=34 delta_count=2 first_delta_ms=1756.36 big_model_ms=2031.12 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "cascade big model streamed"
+2026-07-13 12:43:01.768  INFO    llm.cascade [cascade·end] taskName=Task-69 final_len=142 delta_count=2 total_ms=4431.2 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "cascade end"
+2026-07-13 12:43:01.768  INFO    biz.chat [chat_stream·end] taskName=Task-69 final_len=255 tool_count=2 context_build_ms=17718.93 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "chat_stream end"
+2026-07-13 12:43:01.768  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-69 user_id=000001 session_id=t-image user_msg_len=19 assistant_msg_len=255 request_id=7bfab79522f84499a263a91561cc0c27  "extract_and_archive_async start"
+2026-07-13 12:43:08.405  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=2 prompt_tokens=584 completion_tokens=576 total_tokens=1160 choices=1 duration_ms=6385.98 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:43:08.407  INFO    memory.extractor [llm_extract·ok] taskName=Task-69 count=3 raw_items=3 duration_ms=6387.53 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "llm_extract ok"
+2026-07-13 12:43:08.591  INFO    embedding.bge_m3 [bge_embed·ok] count=3 batch_size=8 fallback=False dim=1024 duration_ms=184.09 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "BGE-M3 embed ok"
+2026-07-13 12:43:09.364  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.9797 median_score=0.9797 embed_ms=0.0 http_ms=771.32 duration_ms=772.14 query_preview=用户资料库里目前只有一张名为「拉布拉多.jpg」的照片，没有猫咪照片 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory vector query"
+2026-07-13 12:43:10.947  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=2 prompt_tokens=285 completion_tokens=57 total_tokens=342 choices=1 duration_ms=1582.08 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:43:10.947  INFO    memory.extractor [dedup_one·llm_decision] taskName=Task-69 user_id=000001 duplicate=True top_sim=0.9797 threshold=0.92 duration_ms=2355.15 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "dedup_one llm"
+2026-07-13 12:43:11.463  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=514.5 duration_ms=515.47 query_preview=「拉布拉多.jpg」中是一只棕色拉布拉多犬，趴在垫子上 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory vector query"
+2026-07-13 12:43:11.785  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=000001 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=1 final_hits=1 top_score=0.7152 median_score=0.7152 embed_ms=0.0 http_ms=321.46 duration_ms=322.25 query_preview=用户曾以为自己在资料库里上传过猫的照片，但实际并不存在 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory vector query"
+2026-07-13 12:43:11.786  INFO    memory.extractor [extract_and_archive·dedup] taskName=Task-69 user_id=000001 extracted=3 kept=2 skipped=1 threshold=0.92 embed_ms=184.67 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "extract dedup summary"
+2026-07-13 12:43:11.940  INFO    embedding.bge_m3 [bge_embed·ok] count=2 batch_size=8 fallback=False dim=1024 duration_ms=154.39 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "BGE-M3 embed ok"
+2026-07-13 12:43:12.559  INFO    vector.memory_store [memory_vector_add·ok] class_name=EchoMemory count=2 http_ms=617.55 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory insert"
+2026-07-13 12:43:12.559  INFO    memory.extractor [vectorize_and_store·ok] taskName=Task-69 user_id=000001 count=2 embed_ms=154.87 write_ms=618.06 duration_ms=773.09 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "vectorize_and_store ok"
+2026-07-13 12:43:15.321  INFO    llm.client [llm_chat·ok] taskName=Task-69 model=MiniMax-M3 msg_count=2 prompt_tokens=238 completion_tokens=165 total_tokens=403 choices=1 duration_ms=2761.38 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "LLM chat ok"
+2026-07-13 12:43:15.321  INFO    memory.extractor [summarize·ok] taskName=Task-69 user_id=000001 input_count=2 out_len=51 duration_ms=2761.59 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "summarize ok"
+2026-07-13 12:43:15.490  INFO    memory.extractor [archive·summary_inserted] taskName=Task-69 user_id=000001 summary_id=179 summary_len=51 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "archive summary inserted"
+2026-07-13 12:43:15.763  WARNING database.mysql [db·slow] taskName=Task-69 op=execute sql=INSERT INTO memories (user_id, level, content, summary, emotion_tag, emotion_intensity, vector_id, parent_id, importance, memory_type, category, embedding_dim) VALUES (%s, %s, %s, %s, %s, %s, %s, %... params=12 rowcount=1 duration_ms=272.67 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "slow sql"
+2026-07-13 12:43:16.278  INFO    memory.extractor [archive·end] taskName=Task-69 user_id=000001 inserted=2 relations=1 summary_id=179 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "archive done"
+2026-07-13 12:43:16.278  INFO    memory.extractor [extract_and_archive·end] taskName=Task-69 user_id=000001 extracted=3 kept=2 inserted=2 vector_stored=2 summary_len=51 duration_ms=14258.8 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "extract_and_archive done"
+2026-07-13 12:43:16.344  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-69 user_id=000001 inserted=2 summary_len=51 duration_ms=14575.29 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory extract done"
+2026-07-13 12:43:16.344  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-69 duration_ms=14575.59 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "memory extract (sync) ok"
+2026-07-13 12:43:16.344  INFO    app.agent_runner [-·end] taskName=Task-69 ok=True stream=False reply_len=255 reply_preview=根据检索结果，你的资料库里只有一张"拉布拉多.jpg"，并没有猫咪的照片哦。  不过里面那只拉布拉多也是超级可爱的，毛色棕亮棕亮的，趴在垫子上，一副乖乖等投喂的样子，眼神特别温柔有灵气 🐶💛  要是你哪天拍了猫猫想存到资料库里，随时都可以发 events=11 chat_latency_ms=34479 duration_ms=34480.18 user_id=000001 session_id=t-image request_id=7bfab79522f84499a263a91561cc0c27  "/chat done"
+INFO:     127.0.0.1:49671 - "POST /chat HTTP/1.1" 200 OK
+2026-07-13 12:43:16.867  INFO    app.agent_runner  taskName=Task-92 stream=False msg_len=4 msg_preview=我回来了 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "/chat received"
+2026-07-13 12:43:16.867  INFO    biz.chat [chat_stream·start] taskName=Task-92 msg_len=4 msg_preview=我回来了 react_max_iter=3 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "chat_stream start"
+2026-07-13 12:43:16.867  INFO    llm.intent [intent_classify·rule_hit] taskName=Task-92 intent=chat source=rule_greeting msg_preview=我回来了 duration_ms=0.0 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "intent classified (rule)"
+2026-07-13 12:43:16.867  INFO    biz.chat [chat_stream·react_decision] taskName=Task-92 intent=chat intent_source=rule_greeting intent_ms=0.0 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "react decision"
+2026-07-13 12:43:16.867  INFO    biz.chat [context_build·start] taskName=Task-92 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "building chat context"
+2026-07-13 12:43:16.867  INFO    memory.retriever [build_chat_context·start] taskName=Task-92 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "build_chat_context begin"
+2026-07-13 12:43:17.004  INFO    memory.retriever [memory_l1·ok] taskName=Task-95 user_id=000001 count=8 limit=8 duration_ms=136.56 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "load_l1_summaries ok"
+2026-07-13 12:43:17.005  INFO    memory.retriever [persona·fallback_default] taskName=Task-93 user_id=000001 duration_ms=137.38 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "load_persona fallback"
+2026-07-13 12:43:17.005  INFO    memory.retriever [memory_l0·ok] taskName=Task-94 user_id=000001 count=2 limit=20 duration_ms=137.33 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "load_l0_memories ok"
+2026-07-13 12:43:17.005  INFO    memory.retriever [build_chat_context·end] taskName=Task-92 ok=True duration_ms=137.86 enable_multimodal=False l1_hit_count=0 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "build_chat_context ok"
+2026-07-13 12:43:17.005  INFO    biz.chat [context_build·end] taskName=Task-92 ok=True duration_ms=138.07 persona_len=106 l0_count=2 l1_summary_count=8 l1_hit_count=0 l0_preview=用户非常喜欢猫 | 用户喜欢猫，想看猫咪相关的内容 intent=chat user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "context_build ok"
+2026-07-13 12:43:17.006  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-92 intent=chat intent_source=rule_greeting seed_len=2 system_len=1254 injected_l1_hint=False injected_tool_hint=False user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "react seed ready"
+2026-07-13 12:43:20.078  INFO    llm.client [llm_chat·ok] taskName=Task-92 model=MiniMax-M3 msg_count=3 prompt_tokens=835 completion_tokens=130 total_tokens=965 choices=1 duration_ms=3072.26 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "LLM chat ok"
+2026-07-13 12:43:20.078  INFO    biz.chat [react_decision·ok] taskName=Task-92 iter=0 out_len=2 has_think=True duration_ms=3072.46 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "react decision ok"
+2026-07-13 12:43:20.078  INFO    biz.chat [react_loop·no_tool] taskName=Task-92 iter=0 out_len=2 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "react no tool call (hand off to cascade)"
+2026-07-13 12:43:20.078  INFO    biz.chat [react_loop·end] taskName=Task-92 tools_called=0 exhausted=False user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "react loop end"
+2026-07-13 12:43:20.078  INFO    llm.cascade [cascade·start] taskName=Task-92 msg_count=2 prefix_tokens=64 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "cascade start"
+2026-07-13 12:43:21.995  INFO    llm.client [small_prefix·ok] taskName=Task-92 model=MiniMax-M3 msg_count=2 out_len=339 duration_ms=1916.06 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "small_prefix ok"
+2026-07-13 12:43:21.995  INFO    llm.cascade [cascade·prefix] taskName=Task-92 prefix_len=0 duration_ms=1916.34 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "cascade prefix ready"
+2026-07-13 12:43:23.890  INFO    llm.client [llm_stream·end] taskName=Task-92 model=MiniMax-M3 msg_count=2 delta_count=8 out_chars=154 first_delta_ms=1257.02 duration_ms=1895.41 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "LLM stream end"
+2026-07-13 12:43:23.891  INFO    llm.cascade [cascade·stream] taskName=Task-92 prefix_kept=False skip_chars=0 raw_len=154 tail_len=38 delta_count=3 first_delta_ms=1625.47 big_model_ms=1895.63 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "cascade big model streamed"
+2026-07-13 12:43:23.891  INFO    llm.cascade [cascade·end] taskName=Task-92 final_len=38 delta_count=3 total_ms=3812.21 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "cascade end"
+2026-07-13 12:43:23.891  INFO    biz.chat [chat_stream·end] taskName=Task-92 final_len=38 tool_count=0 context_build_ms=7023.52 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "chat_stream end"
+2026-07-13 12:43:23.891  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-92 user_id=000001 session_id=t-image user_msg_len=4 assistant_msg_len=38 request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "extract_and_archive_async start"
+2026-07-13 12:43:30.871  INFO    llm.client [llm_chat·ok] taskName=Task-92 model=MiniMax-M3 msg_count=2 prompt_tokens=461 completion_tokens=600 total_tokens=1061 choices=1 duration_ms=6650.76 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "LLM chat ok"
+2026-07-13 12:43:30.871  INFO    memory.extractor [llm_extract·empty] taskName=Task-92 raw_preview=<think>The user said "我回来了" (I'm back) and the assistant responded by welcoming them back and asking about their day. Th cleaned_preview=[   {"fact": "用户回来了，重新开始对话", "causes": "", "level": "L1", "emotion": "neutral", "intensity": 0.2, "relation": ""},   {"f duration_ms=6651.13 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "llm_extract empty list"
+2026-07-13 12:43:30.871  INFO    memory.extractor [extract_and_archive·empty] taskName=Task-92 user_id=000001 duration_ms=6651.37 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "extract_and_archive skip (no items)"
+2026-07-13 12:43:31.106  WARNING database.mysql [db·slow] taskName=Task-92 op=execute sql=UPDATE memory_extract_logs SET status='success', finished_at=NOW() WHERE id=%s params=1 rowcount=0 duration_ms=234.07 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "slow sql"
+2026-07-13 12:43:31.106  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-92 user_id=000001 inserted=0 summary_len=0 duration_ms=7215.3 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "memory extract done"
+2026-07-13 12:43:31.106  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-92 duration_ms=7215.41 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "memory extract (sync) ok"
+2026-07-13 12:43:31.106  INFO    app.agent_runner [-·end] taskName=Task-92 ok=True stream=False reply_len=38 reply_preview=欢迎回来～今天过得怎么样？😊  还记得上次你说想看猫咪图片，后来上传了吗？🐱 events=7 chat_latency_ms=14239 duration_ms=14239.62 user_id=000001 session_id=t-image request_id=4dc41d2764ff4939ac4cbf7a97ecc942  "/chat done"
+INFO:     127.0.0.1:53122 - "POST /chat HTTP/1.1" 200 OK
+2026-07-13 12:43:38.075  INFO    app.agent_runner [ingest_file·start] taskName=Task-103 user_id=000001 request_id=ead8a7c57cdb424f9ed37233db926977 fileId=test-001 fileName=烟雾测试.txt has_fileKey=False has_url=True url=https://example.com/test.txt  "/ingest_file received"
+2026-07-13 12:43:38.076  INFO    app.agent_runner [ingest_file·dispatch] taskName=Task-103 queue_elapsed_ms=0.41  "/ingest_file queued"
+INFO:     127.0.0.1:53132 - "POST /ingest_file HTTP/1.1" 200 OK
+2026-07-13 12:43:38.076  INFO    biz.ingest [ingest·start] taskName=Task-103 file_id=test-001 file_name=烟雾测试.txt has_file_key=False url=https://example.com/test.txt user_id=000001 request_id=ead8a7c57cdb424f9ed37233db926977  "ingest start"
+2026-07-13 12:43:38.997  WARNING biz.ingest [download·retry] taskName=Task-103 attempt=1 max_attempts=3 url=https://example.com/test.txt timeout_s=60 elapsed_ms=921.18 error_type=DownloadError error_msg=HTTP 404 for https://example.com/test.txt error_module=utils.downloader error_class=utils.downloader.DownloadError user_id=000001 request_id=ead8a7c57cdb424f9ed37233db926977  "download attempt failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\ingest.py", line 172, in _download_with_retry
+    data = await download_file_async(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\utils\downloader.py", line 124, in download_file_async
+    raise DownloadError(f"HTTP {resp.status_code} for {url}")
+utils.downloader.DownloadError: HTTP 404 for https://example.com/test.txt--- end ---
+2026-07-13 12:43:40.909  WARNING biz.ingest [download·retry] taskName=Task-103 attempt=2 max_attempts=3 url=https://example.com/test.txt timeout_s=60 elapsed_ms=2833.03 error_type=DownloadError error_msg=HTTP 404 for https://example.com/test.txt error_module=utils.downloader error_class=utils.downloader.DownloadError user_id=000001 request_id=ead8a7c57cdb424f9ed37233db926977  "download attempt failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\ingest.py", line 172, in _download_with_retry
+    data = await download_file_async(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\utils\downloader.py", line 124, in download_file_async
+    raise DownloadError(f"HTTP {resp.status_code} for {url}")
+utils.downloader.DownloadError: HTTP 404 for https://example.com/test.txt--- end ---
+2026-07-13 12:43:43.989  WARNING biz.ingest [download·retry] taskName=Task-103 attempt=3 max_attempts=3 url=https://example.com/test.txt timeout_s=60 elapsed_ms=5913.04 error_type=DownloadError error_msg=HTTP 404 for https://example.com/test.txt error_module=utils.downloader error_class=utils.downloader.DownloadError user_id=000001 request_id=ead8a7c57cdb424f9ed37233db926977  "download attempt failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\ingest.py", line 172, in _download_with_retry
+    data = await download_file_async(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\utils\downloader.py", line 124, in download_file_async
+    raise DownloadError(f"HTTP {resp.status_code} for {url}")
+utils.downloader.DownloadError: HTTP 404 for https://example.com/test.txt--- end ---
+2026-07-13 12:43:43.991  ERROR   biz.ingest [ingest·download_error] taskName=Task-103 file_id=test-001 url=https://example.com/test.txt duration_ms=5914.47 error_type=DownloadError error_msg=HTTP 404 for https://example.com/test.txt error_module=utils.downloader error_class=utils.downloader.DownloadError user_id=000001 request_id=ead8a7c57cdb424f9ed37233db926977  "ingest download failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\ingest.py", line 252, in ingest_file
+    data = await _download_with_retry(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\biz\ingest.py", line 163, in _download_with_retry
+    async for attempt in AsyncRetrying(
+    ...<36 lines>...
+                raise
+  File "E:\Python\Python313\Lib\site-packages\tenacity\asyncio\__init__.py", line 170, in __anext__
+    do = await self.iter(retry_state=self._retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\tenacity\asyncio\__init__.py", line 157, in iter
+    result = await action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\tenacity\_utils.py", line 111, in inner
+    return call(*args, **kwargs)
+  File "E:\Python\Python313\Lib\site-packages\tenacity\__init__.py", line 413, in exc_check
+    raise retry_exc.reraise()
+          ~~~~~~~~~~~~~~~~~^^
+  File "E:\Python\Python313\Lib\site-packages\tenacity\__init__.py", line 184, in reraise
+    raise self.last_attempt.result()
+          ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\Python\Python313\Lib\concurrent\futures\_base.py", line 449, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "E:\Python\Python313\Lib\concurrent\futures\_base.py", line 401, in __get_result
+    raise self._exception
+  File "E:\Python\workspace\echo-ai\biz\ingest.py", line 172, in _download_with_retry
+    data = await download_file_async(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\utils\downloader.py", line 124, in download_file_async
+    raise DownloadError(f"HTTP {resp.status_code} for {url}")
+utils.downloader.DownloadError: HTTP 404 for https://example.com/test.txt--- end ---
