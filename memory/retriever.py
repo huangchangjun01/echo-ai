@@ -67,7 +67,7 @@ def _log_table_error(op: str, exc: Exception, table: str, *, extra: dict | None 
 
 # ---------- L0 ----------
 
-async def load_l0_memories(user_id: str, limit: int | None = None) -> list[dict]:
+async def load_l0_memories(user_id: str, limit: int | None = None, role_id: str = "default") -> list[dict]:
     """从 memories 表加载用户的 L0 长期核心记忆。"""
     if not user_id:
         return []
@@ -82,11 +82,11 @@ async def load_l0_memories(user_id: str, limit: int | None = None) -> list[dict]
             SELECT id, content, memory_type AS category, vector_id,
                    created_at, updated_at
             FROM memories
-            WHERE user_id=%s AND level='L0'
+            WHERE user_id=%s AND role_id=%s AND level='L0'
             ORDER BY updated_at DESC
             LIMIT %s
             """,
-            (user_id, max(1, limit)),
+            (user_id, role_id, max(1, limit)),
         )
         out = [
             {
@@ -116,7 +116,7 @@ async def load_l0_memories(user_id: str, limit: int | None = None) -> list[dict]
 
 # ---------- L1 ----------
 
-async def load_l1_summaries(user_id: str, limit: int | None = None) -> list[dict]:
+async def load_l1_summaries(user_id: str, limit: int | None = None, role_id: str = "default") -> list[dict]:
     """从 MySQL 加载最近 L1/L2 摘要。"""
     if not user_id:
         return []
@@ -131,11 +131,11 @@ async def load_l1_summaries(user_id: str, limit: int | None = None) -> list[dict
             """
             SELECT id, level, content, summary, emotion_tag, emotion_intensity, created_at
             FROM memories
-            WHERE user_id=%s AND level IN ('L1','L2')
+            WHERE user_id=%s AND role_id=%s AND level IN ('L1','L2')
             ORDER BY created_at DESC
             LIMIT %s
             """,
-            (user_id, max(1, limit)),
+            (user_id, role_id, max(1, limit)),
         )
         out = []
         for r in rows:
@@ -169,7 +169,7 @@ async def load_l1_summaries(user_id: str, limit: int | None = None) -> list[dict
 
 # ---------- 因果链 ----------
 
-async def causal_chain(user_id: str, memory_id: int, depth: int = 2) -> list[dict]:
+async def causal_chain(user_id: str, memory_id: int, depth: int = 2, role_id: str = "default") -> list[dict]:
     """从 MySQL memory_relations 查询以 memory_id 为起点的因果链（兼容旧 schema）。"""
     if not user_id or not memory_id:
         return []
@@ -183,11 +183,11 @@ async def causal_chain(user_id: str, memory_id: int, depth: int = 2) -> list[dic
                    COALESCE(NULLIF(relation_type, ''), relation) AS relation,
                    COALESCE(weight, confidence, 1.0) AS weight
             FROM memory_relations
-            WHERE user_id=%s AND (source_id=%s OR target_id=%s)
+            WHERE user_id=%s AND role_id=%s AND (source_id=%s OR target_id=%s)
             ORDER BY weight DESC, created_at DESC
             LIMIT %s
             """,
-            (user_id, memory_id, memory_id, max(1, depth * 4)),
+            (user_id, role_id, memory_id, memory_id, max(1, depth * 4)),
         )
         out = [
             {
@@ -224,6 +224,7 @@ async def multimodal_search(
     *,
     query_embedding: list[float] | None = None,
     top_k: int | None = None,
+    role_id: str = "default",
 ) -> dict[str, Any]:
     """weaviate 跨模态检索：文本 query → 命中图片/音频/视频/文本。
 
@@ -260,7 +261,7 @@ async def multimodal_search(
             query,
             top_k,
             _fixed_embed,
-            {"userId": user_id},
+            {"userId": user_id, "roleId": role_id},
         )
         ids = result.get("ids", [[]])[0]
         docs = result.get("documents", [[]])[0]
@@ -397,7 +398,7 @@ async def save_persona(user_id: str, persona: str) -> None:
 
 # ---------- 组合：构建 chat 上下文 ----------
 
-async def build_chat_context(user_id: str, query: str, *, enable_multimodal: bool = True) -> dict:
+async def build_chat_context(user_id: str, query: str, *, enable_multimodal: bool = True, role_id: str = "default") -> dict:
     """构建 chat 接口所需的注入上下文：
     - persona
     - L0 l0_memories（list[str]，从 memories 表 level='L0' 读取）
@@ -411,15 +412,15 @@ async def build_chat_context(user_id: str, query: str, *, enable_multimodal: boo
         if enable_multimodal:
             persona, l0, recent, l1 = await asyncio.gather(
                 load_persona(user_id),
-                load_l0_memories(user_id),
-                load_l1_summaries(user_id),
-                multimodal_search(user_id, query, top_k=get_settings().memory.l1_topk),
+                load_l0_memories(user_id, role_id=role_id),
+                load_l1_summaries(user_id, role_id=role_id),
+                multimodal_search(user_id, query, top_k=get_settings().memory.l1_topk, role_id=role_id),
             )
         else:
             persona, l0, recent = await asyncio.gather(
                 load_persona(user_id),
-                load_l0_memories(user_id),
-                load_l1_summaries(user_id),
+                load_l0_memories(user_id, role_id=role_id),
+                load_l1_summaries(user_id, role_id=role_id),
             )
             l1 = {"hits": [], "modality_counts": {}}
         meta.update(

@@ -315,6 +315,7 @@ async def _resolve_tools(
     session_id: str,
     messages: list[dict[str, str]],
     max_iter: int,
+    role_id: str = "default",
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """ReAct 工具解析：逐轮让 LLM 决定是否调用工具并执行，直到 LLM 不再要求工具或迭代耗尽。
 
@@ -388,6 +389,7 @@ async def _resolve_tools(
         if isinstance(args, dict):
             args.setdefault("user_id", user_id)
             args.setdefault("session_id", session_id)
+            args.setdefault("role_id", role_id)
 
         logger.info(
             "react iter dispatch",
@@ -456,6 +458,7 @@ async def chat_stream(
     user_id: str,
     session_id: str,
     user_msg: str,
+    role_id: str = "default",
 ) -> AsyncIterator[dict[str, Any]]:
     """流式 chat：预注入 → ReAct → 流式级联输出。
 
@@ -503,6 +506,7 @@ async def chat_stream(
             user_id,
             user_msg,
             enable_multimodal=(intent == Intent.IMAGE_SEARCH),
+            role_id=role_id,
         )
         l0_list = ctx.get("l0_memories", []) or []
         ctx_meta.update(
@@ -581,6 +585,7 @@ async def chat_stream(
         session_id=session_id,
         messages=tool_seed,
         max_iter=settings.react_max_iter,
+        role_id=role_id,
     )
     for entry in tool_log:
         yield {
@@ -650,7 +655,7 @@ async def chat_stream(
     yield {"type": "done", "full": final_text}
 
 
-async def chat_collect(user_id: str, session_id: str, user_msg: str) -> dict:
+async def chat_collect(user_id: str, session_id: str, user_msg: str, role_id: str = "default") -> dict:
     """一次性收集 chat 结果：等流结束 → 同步等待记忆抽取落库 → 再返回。
 
     与 chat_stream 不同：chat_collect 在生成完整回复后立即 await 记忆抽取，
@@ -659,7 +664,7 @@ async def chat_collect(user_id: str, session_id: str, user_msg: str) -> dict:
     events: list[dict[str, Any]] = []
     full = ""
     started = time.time()
-    async for ev in chat_stream(user_id, session_id, user_msg):
+    async for ev in chat_stream(user_id, session_id, user_msg, role_id):
         events.append(ev)
         if ev["type"] == "done":
             full = ev["full"]
@@ -673,6 +678,7 @@ async def chat_collect(user_id: str, session_id: str, user_msg: str) -> dict:
                 session_id=session_id,
                 user_msg=user_msg,
                 assistant_msg=full,
+                role_id=role_id,
             )
             logger.info(
                 "memory extract (sync) ok",

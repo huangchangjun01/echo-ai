@@ -28,13 +28,11 @@ SUPPORTED_TEXT_MIMES = {
     "application/x-ndjson",
     "text/x-log",
 }
-# MIMEs we explicitly do NOT support (audio / video / archives / etc.).
+# 音频 / 视频：解析后生成记忆（音频转写、视频关键帧描述）。
+SUPPORTED_AUDIO_MIMES = {"audio/mpeg", "audio/ogg", "audio/flac", "audio/wav", "audio/mp4"}
+SUPPORTED_VIDEO_MIMES = {"video/mp4", "video/webm", "video/quicktime"}
+# 仍明确拒绝的二进制容器（压缩包 / 未知二进制）。
 REJECTED_BINARY_MIMES = {
-    "video/mp4",
-    "video/webm",
-    "audio/mpeg",
-    "audio/ogg",
-    "audio/flac",
     "application/zip",
     "application/octet-stream",
     "application/x-binary",
@@ -47,6 +45,8 @@ class IngestResult:
     file_id: str
     chunks: int = 0
     error: str | None = None
+    parsed_text: str = ""  # 解析出的文本内容（喂给记忆抽取）
+    modality: str = "text"
 
 
 def _detect_mime(data: bytes) -> str:
@@ -216,12 +216,20 @@ async def ingest_file(
     file_obj: dict[str, Any],
     embeddings: ChineseCLIPEmbeddings,
     vectorstore: Any,
+    desc: str | None = None,
+    role_id: str = "default",
 ) -> IngestResult:
-    """Download, classify, embed, and persist a single file."""
+    """Download, classify, embed, persist a single file, then derive role-scoped memories.
+
+    `desc` 为用户为文件填写的文字描述；`role_id` 为角色隔离标识。
+    当既无 url 也无 fileKey 但有 desc 时，走「纯文本记忆」分支（不下载，直接把 desc 入库）。
+    """
     file_id = file_obj.get("fileId") or ""
     file_name = file_obj.get("fileName") or ""
     file_key = file_obj.get("fileKey")
     url = _resolve_url(file_key, file_obj.get("url"))
+    role_id = role_id or "default"
+    desc = (desc or "").strip()
     t0 = time.perf_counter()
     logger.info(
         "ingest start",
@@ -230,11 +238,22 @@ async def ingest_file(
             event="start",
             file_id=file_id,
             file_name=file_name,
+            role_id=role_id,
             has_file_key=bool(file_key),
+            has_desc=bool(desc),
             url=url,
         ),
     )
+
+    # 纯文本记忆分支：无可下载资源但有描述 → 把 desc 作为文本片段入 EchoDoc + 生成记忆。
     if not url:
+        if desc:
+            result = await _ingest_text(
+                user_id, file_id, file_name, "", desc, embeddings, vectorstore, role_id=role_id
+            )
+            await _maybe_generate_memory(user_id, role_id, file_id, file_name, desc, result)
+            result_log_common(result, t0)
+            return result
         logger.error(
             "ingest missing url",
             extra=merge_extra(
@@ -276,11 +295,33 @@ async def ingest_file(
     )
 
     if mime in SUPPORTED_IMAGE_MIMES:
-        result = await _ingest_image(user_id, file_id, file_name, url, data, embeddings, vectorstore)
-        result_log_common(result, t0)
-        return result
-
-    if mime in REJECTED_BINARY_MIMES:
+        result = await _ingest_image(
+            user_id, file_id, file_name, url, data, embeddings, vectorstore, role_id=role_id
+        )
+    elif mime in SUPPORTED_AUDIO_MIMES:
+        result = await _ingest_audio(
+            user_id, file_id, file_name, url, data, vectorstore, role_id=role_id
+        )
+    elif mime in SUPPORTED_VIDEO_MIMES:
+        result = await _ingest_video(
+            user_id, file_id, file_name, url, data, vectorstore, role_id=role_id
+        )
+    elif mime.startswith("text/") or mime in SUPPORTED_TEXT_MIMES:
+        text = _decode_text(data)
+        logger.info(
+            "ingest text decoded",
+            extra=merge_extra(
+                stage="ingest",
+                event="text_decoded",
+                file_id=file_id,
+                text_len=len(text),
+                mime=mime,
+            ),
+        )
+        result = await _ingest_text(
+            user_id, file_id, file_name, url, text, embeddings, vectorstore, role_id=role_id
+        )
+    elif mime in REJECTED_BINARY_MIMES:
         logger.error(
             "ingest rejected mime",
             extra=merge_extra(
@@ -294,40 +335,64 @@ async def ingest_file(
             ),
         )
         return IngestResult(False, file_id, error=f"Unsupported binary content type: {mime}")
-
-    if mime.startswith("text/") or mime in SUPPORTED_TEXT_MIMES:
-        text = _decode_text(data)
-        logger.info(
-            "ingest text decoded",
+    else:
+        logger.error(
+            "ingest unsupported mime",
             extra=merge_extra(
                 stage="ingest",
-                event="text_decoded",
+                event="unsupported_mime",
                 file_id=file_id,
-                text_len=len(text),
+                file_name=file_name,
+                url=url,
                 mime=mime,
+                bytes=len(data),
             ),
         )
-        result = await _ingest_text(user_id, file_id, file_name, url, text, embeddings, vectorstore)
-        result_log_common(result, t0)
-        return result
+        return IngestResult(False, file_id, error=f"Unsupported content type: {mime}")
 
-    logger.error(
-        "ingest unsupported mime",
-        extra=merge_extra(
-            stage="ingest",
-            event="unsupported_mime",
-            file_id=file_id,
+    await _maybe_generate_memory(user_id, role_id, file_id, file_name, desc, result)
+    result_log_common(result, t0)
+    return result
+
+
+async def _maybe_generate_memory(
+    user_id: str,
+    role_id: str,
+    file_id: str,
+    file_name: str,
+    desc: str,
+    result: IngestResult,
+) -> None:
+    """入库成功后，把 desc + 解析内容交给记忆抽取（best-effort，失败不影响入库）。"""
+    if not result.success:
+        return
+    parsed = (result.parsed_text or "").strip()
+    if not desc and not parsed:
+        return
+    try:
+        from memory import extract_from_file
+
+        await extract_from_file(
+            user_id=user_id,
+            role_id=role_id,
             file_name=file_name,
-            url=url,
-            mime=mime,
-            bytes=len(data),
-        ),
-    )
-    return IngestResult(
-        False,
-        file_id,
-        error=f"Unsupported content type: {mime}",
-    )
+            modality=result.modality,
+            desc=desc,
+            parsed_content=parsed,
+            source_meta={"fileId": file_id},
+        )
+    except Exception as e:
+        log_exception(
+            logger,
+            "file memory generation failed (non-fatal)",
+            exc=e,
+            level=logging.WARNING,
+            stage="ingest_memory",
+            event="error",
+            file_id=file_id,
+            role_id=role_id,
+            modality=result.modality,
+        )
 
 
 def result_log_common(result: IngestResult, t0: float) -> None:
@@ -366,6 +431,7 @@ async def _ingest_text(
     text: str,
     embeddings: ChineseCLIPEmbeddings,
     vectorstore: Any,
+    role_id: str = "default",
 ) -> IngestResult:
     ingest_settings = get_settings().ingest
     embed_settings = get_settings().embedding
@@ -425,6 +491,7 @@ async def _ingest_text(
         "fileId": file_id,
         "fileName": file_name,
         "userId": user_id,
+        "roleId": role_id,
         "sourceUrl": url,
         "totalChunks": len(chunks),
         "modality": "text",
@@ -456,7 +523,7 @@ async def _ingest_text(
             url=url,
         )
         return IngestResult(False, file_id, error=f"Vector store failed: {e}")
-    return IngestResult(True, file_id, chunks=len(chunks))
+    return IngestResult(True, file_id, chunks=len(chunks), parsed_text=text, modality="text")
 
 
 async def _ingest_image(
@@ -467,6 +534,7 @@ async def _ingest_image(
     data: bytes,
     embeddings: ChineseCLIPEmbeddings,
     vectorstore: Any,
+    role_id: str = "default",
 ) -> IngestResult:
     try:
         t = time.perf_counter()
@@ -498,6 +566,7 @@ async def _ingest_image(
         "fileId": file_id,
         "fileName": file_name,
         "userId": user_id,
+        "roleId": role_id,
         "sourceUrl": url,
         "chunkIndex": 0,
         "totalChunks": 1,
@@ -527,7 +596,184 @@ async def _ingest_image(
             url=url,
         )
         return IngestResult(False, file_id, error=f"Vector store failed: {e}")
-    return IngestResult(True, file_id, chunks=1)
+
+    # 图像描述（best-effort）：交给 understand_image（CLIP+LLM）产出文字，供记忆抽取使用。
+    description = await _describe_image(url, file_id)
+    return IngestResult(True, file_id, chunks=1, parsed_text=description, modality="image")
+
+
+async def _describe_image(url: str, file_id: str) -> str:
+    """调用 understand_image 生成图片文字描述；失败返回空串。"""
+    if not url:
+        return ""
+    try:
+        from tools.understand_image import _understand_image_async
+
+        result = await _understand_image_async(url)
+        if result.ok:
+            return (result.data or {}).get("description", "") or ""
+    except Exception as e:
+        log_exception(
+            logger,
+            "image description failed (non-fatal)",
+            exc=e,
+            level=logging.WARNING,
+            stage="ingest_image",
+            event="describe_error",
+            file_id=file_id,
+            url=url,
+        )
+    return ""
+
+
+async def _ingest_audio(
+    user_id: str,
+    file_id: str,
+    file_name: str,
+    url: str,
+    data: bytes,
+    vectorstore: Any,
+    role_id: str = "default",
+) -> IngestResult:
+    """音频：Whisper 转写 → 用 CLIP 文本编码器把转写文本写入 EchoDoc（modality=audio）。"""
+    try:
+        from embedding import whisper
+
+        audio = await asyncio.to_thread(whisper.embed_audio, data)
+        transcript = (audio.get("text") or "").strip()
+    except Exception as e:
+        log_exception(
+            logger,
+            "audio transcribe failed",
+            exc=e,
+            stage="ingest_audio",
+            event="transcribe_error",
+            file_id=file_id,
+            url=url,
+            audio_bytes=len(data or b""),
+        )
+        return IngestResult(False, file_id, error=f"Audio transcribe failed: {e}")
+
+    logger.info(
+        "audio transcribed",
+        extra=merge_extra(
+            stage="ingest_audio",
+            event="transcribed",
+            file_id=file_id,
+            text_len=len(transcript),
+        ),
+    )
+    if not transcript:
+        return IngestResult(False, file_id, error="Empty audio transcript")
+
+    try:
+        vectors = await asyncio.to_thread(compute_text_embeddings, [transcript])
+    except Exception as e:
+        log_exception(
+            logger,
+            "audio transcript embedding failed",
+            exc=e,
+            stage="ingest_audio",
+            event="embed_error",
+            file_id=file_id,
+            url=url,
+        )
+        return IngestResult(False, file_id, error=f"Audio embedding failed: {e}")
+
+    metadata = {
+        "fileId": file_id,
+        "fileName": file_name,
+        "userId": user_id,
+        "roleId": role_id,
+        "sourceUrl": url,
+        "chunkIndex": 0,
+        "totalChunks": 1,
+        "modality": "audio",
+    }
+    try:
+        vectorstore.add_texts(ids=[file_id], texts=[transcript], metadatas=[metadata], embeddings=vectors)
+    except Exception as e:
+        log_exception(
+            logger,
+            "vector store write failed",
+            exc=e,
+            stage="ingest_audio",
+            event="vector_write_error",
+            file_id=file_id,
+            url=url,
+        )
+        return IngestResult(False, file_id, error=f"Vector store failed: {e}")
+    return IngestResult(True, file_id, chunks=1, parsed_text=transcript, modality="audio")
+
+
+async def _ingest_video(
+    user_id: str,
+    file_id: str,
+    file_name: str,
+    url: str,
+    data: bytes,
+    vectorstore: Any,
+    role_id: str = "default",
+) -> IngestResult:
+    """视频：关键帧聚合成 CLIP 512 向量 + 文字描述，写入 EchoDoc（modality=video）。"""
+    try:
+        from embedding import video_mae
+
+        video = await asyncio.to_thread(video_mae.embed_video, data)
+        vector = video.get("embedding") or []
+        description = (video.get("description") or "").strip()
+    except Exception as e:
+        log_exception(
+            logger,
+            "video parse failed",
+            exc=e,
+            stage="ingest_video",
+            event="parse_error",
+            file_id=file_id,
+            url=url,
+            video_bytes=len(data or b""),
+        )
+        return IngestResult(False, file_id, error=f"Video parse failed: {e}")
+
+    logger.info(
+        "video parsed",
+        extra=merge_extra(
+            stage="ingest_video",
+            event="parsed",
+            file_id=file_id,
+            dim=len(vector),
+            desc_len=len(description),
+        ),
+    )
+    if not vector or not any(vector):
+        return IngestResult(False, file_id, error="Empty video embedding")
+
+    metadata = {
+        "fileId": file_id,
+        "fileName": file_name,
+        "userId": user_id,
+        "roleId": role_id,
+        "sourceUrl": url,
+        "chunkIndex": 0,
+        "totalChunks": 1,
+        "modality": "video",
+    }
+    try:
+        vectorstore.add_texts(
+            ids=[file_id], texts=[description or file_name or ""], metadatas=[metadata], embeddings=[vector]
+        )
+    except Exception as e:
+        log_exception(
+            logger,
+            "vector store write failed",
+            exc=e,
+            stage="ingest_video",
+            event="vector_write_error",
+            file_id=file_id,
+            url=url,
+        )
+        return IngestResult(False, file_id, error=f"Vector store failed: {e}")
+    return IngestResult(True, file_id, chunks=1, parsed_text=description, modality="video")
 
 
 # Legacy alias kept for any callers using the old synchronous signature.

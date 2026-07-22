@@ -90,7 +90,11 @@
       "Bash(tee logs/server.log)",
       "Bash(powershell.exe -Command 'Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')",
       "Bash(python tools/unit_extractor_parse.py)",
-      "Bash(curl -s -o /dev/null -w \"server_http=%{http_code}\\\\n\" --max-time 3 http://127.0.0.1:8000/health)"
+      "Bash(curl -s -o /dev/null -w \"server_http=%{http_code}\\\\n\" --max-time 3 http://127.0.0.1:8000/health)",
+      "Read(//Users/dev/**)",
+      "Read(//Users/**)",
+      "Bash(git ls-remote *)",
+      "Bash(git *)"
     ]
   }
 }

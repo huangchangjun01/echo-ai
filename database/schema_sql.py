@@ -26,6 +26,7 @@ DDL_STATEMENTS: tuple[str, ...] = (
     CREATE TABLE IF NOT EXISTS memories (
         id              BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         user_id         VARCHAR(128) NOT NULL,
+        role_id         VARCHAR(128) NOT NULL DEFAULT 'default',
         level           VARCHAR(4) NOT NULL DEFAULT 'L1',
         content         TEXT NOT NULL,
         summary         TEXT NULL,
@@ -40,7 +41,7 @@ DDL_STATEMENTS: tuple[str, ...] = (
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_mem_user_level (user_id, level, created_at)
+        INDEX idx_mem_user_role_level (user_id, role_id, level, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     # ---------- 记忆关系 ----------
@@ -48,6 +49,7 @@ DDL_STATEMENTS: tuple[str, ...] = (
     CREATE TABLE IF NOT EXISTS memory_relations (
         id          BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         user_id     VARCHAR(128) NOT NULL,
+        role_id     VARCHAR(128) NOT NULL DEFAULT 'default',
         source_id   BIGINT NOT NULL,
         target_id   BIGINT NOT NULL,
         relation    VARCHAR(16) NOT NULL,
@@ -97,9 +99,11 @@ ALTER_PROBES: tuple[tuple[str, str], ...] = (
     ("memories", "ALTER TABLE memories ADD COLUMN memory_type VARCHAR(64) NOT NULL DEFAULT 'fact'"),
     ("memories", "ALTER TABLE memories ADD COLUMN category VARCHAR(64) NOT NULL DEFAULT 'general'"),
     ("memories", "ALTER TABLE memories ADD COLUMN embedding_dim INT NULL"),
+    ("memories", "ALTER TABLE memories ADD COLUMN role_id VARCHAR(128) NOT NULL DEFAULT 'default'"),
     ("memories", "ALTER TABLE memories ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
     # ---------- memory_relations ----------
     ("memory_relations", "ALTER TABLE memory_relations ADD COLUMN user_id VARCHAR(128) NOT NULL DEFAULT ''"),
+    ("memory_relations", "ALTER TABLE memory_relations ADD COLUMN role_id VARCHAR(128) NOT NULL DEFAULT 'default'"),
     ("memory_relations", "ALTER TABLE memory_relations ADD COLUMN relation VARCHAR(16) NOT NULL DEFAULT ''"),
     ("memory_relations", "ALTER TABLE memory_relations ADD COLUMN weight FLOAT NOT NULL DEFAULT 1.0"),
     ("memory_relations", "ALTER TABLE memory_relations ADD INDEX idx_rel_user_source (user_id, source_id)"),

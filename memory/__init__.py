@@ -1,6 +1,6 @@
 """memory 子包：抽取 / 检索 / 分层归档。"""
 
-from .extractor import extract_and_archive, extract_and_archive_async
+from .extractor import extract_and_archive, extract_and_archive_async, extract_from_file
 from .retriever import (
     build_chat_context,
     causal_chain,
@@ -16,6 +16,7 @@ __all__ = [
     "causal_chain",
     "extract_and_archive",
     "extract_and_archive_async",
+    "extract_from_file",
     "load_l0_memories",
     "load_l1_summaries",
     "load_persona",

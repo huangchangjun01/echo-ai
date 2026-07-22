@@ -35,15 +35,17 @@ class SearchMemoryTool(BaseTool):
         query: str = "",
         user_id: str = "",
         top_k: int = 8,
+        role_id: str = "default",
         **_,
     ) -> ToolResult:
-        return await _search_memory_async(query=query, user_id=user_id, top_k=top_k)
+        return await _search_memory_async(query=query, user_id=user_id, top_k=top_k, role_id=role_id)
 
     def run(
         self,
         query: str = "",
         user_id: str = "",
         top_k: int = 8,
+        role_id: str = "default",
         **_,
     ) -> ToolResult:
         try:
@@ -52,10 +54,12 @@ class SearchMemoryTool(BaseTool):
 
             return fail("Use arun() in async context")
         except RuntimeError:
-            return asyncio.run(_search_memory_async(query=query, user_id=user_id, top_k=top_k))
+            return asyncio.run(
+                _search_memory_async(query=query, user_id=user_id, top_k=top_k, role_id=role_id)
+            )
 
 
-async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolResult:
+async def _search_memory_async(*, query: str, user_id: str, top_k: int, role_id: str = "default") -> ToolResult:
     from config.config import get_settings
 
     top_k = max(1, min(int(top_k or 8), 50))
@@ -89,7 +93,7 @@ async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolR
                 query,
                 top_k,
                 _fixed_embed,
-                {"userId": user_id},
+                {"userId": user_id, "roleId": role_id},
             )
             ids = result.get("ids", [[]])[0]
             docs = result.get("documents", [[]])[0]
@@ -142,7 +146,7 @@ async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolR
                 query,
                 top_k,
                 _fixed_embed,
-                {"userId": user_id},
+                {"userId": user_id, "roleId": role_id},
             )
             ids = result.get("ids", [[]])[0]
             docs = result.get("documents", [[]])[0]
@@ -199,10 +203,10 @@ async def _search_memory_async(*, query: str, user_id: str, top_k: int) -> ToolR
                 """
                 SELECT id, level, content, emotion_tag, emotion_intensity
                 FROM memories
-                WHERE user_id=%s AND content LIKE %s
+                WHERE user_id=%s AND role_id=%s AND content LIKE %s
                 ORDER BY created_at DESC LIMIT 5
                 """,
-                (user_id, f"%{content[:32]}%"),
+                (user_id, role_id, f"%{content[:32]}%"),
             )
             for r in rows:
                 causal.append(

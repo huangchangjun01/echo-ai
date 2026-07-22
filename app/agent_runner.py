@@ -184,6 +184,7 @@ app = FastAPI(
 class ChatRequest(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=128, alias="userId")
     session_id: str | None = Field(None, alias="sessionId")
+    role_id: str = Field("default", min_length=1, max_length=128, alias="roleId")
     message: str = Field(..., min_length=1, max_length=4096)
     stream: bool = False
 
@@ -200,6 +201,8 @@ class FileObject(BaseModel):
 class IngestRequest(BaseModel):
     userId: str
     file: FileObject
+    desc: str | None = None
+    roleId: str = "default"
 
 
 # ---------- 路由 ----------
@@ -225,6 +228,7 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
 
     user_id = req.user_id
     session_id = req.session_id or uuid.uuid4().hex
+    role_id = req.role_id or "default"
     request_id = uuid.uuid4().hex
     msg_len = len(req.message or "")
     ctx_token = bind_request(
@@ -249,7 +253,7 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
                 nonlocal_full = {"v": ""}
                 emitted = {"context": False, "prefix": False, "delta": False, "tool": 0}
                 t = time.perf_counter()
-                async for ev in chat_stream(user_id, session_id, req.message):
+                async for ev in chat_stream(user_id, session_id, req.message, role_id):
                     et = ev.get("type")
                     if et == "done":
                         nonlocal_full["v"] = ev.get("full", "") or ""
@@ -292,6 +296,7 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
                                 session_id=session_id,
                                 user_msg=req.message,
                                 assistant_msg=nonlocal_full["v"],
+                                role_id=role_id,
                             )
                         except Exception as e:  # noqa: BLE001
                             log_exception(
@@ -312,7 +317,7 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
 
             return StreamingResponse(_gen(), media_type="text/event-stream")
 
-        result = await chat_collect(user_id, session_id, req.message)
+        result = await chat_collect(user_id, session_id, req.message, role_id)
         elapsed = (time.perf_counter() - t0) * 1000.0
         logger.info(
             "/chat done",
@@ -370,10 +375,12 @@ async def ingest_file_endpoint(req: IngestRequest, background: BackgroundTasks) 
             event="start",
             user_id=req.userId,
             request_id=request_id,
+            role_id=req.roleId or "default",
             fileId=req.file.fileId,
             fileName=req.file.fileName,
             has_fileKey=bool(req.file.fileKey),
             has_url=bool(req.file.url),
+            has_desc=bool(req.desc),
             url=req.file.url or "",
         ),
     )
@@ -414,6 +421,8 @@ async def ingest_file_endpoint(req: IngestRequest, background: BackgroundTasks) 
         file_obj=file_dict,
         embeddings=embeddings,
         vectorstore=vectorstore,
+        desc=req.desc,
+        role_id=req.roleId or "default",
     )
     return {"ok": True, "queued": True, "fileId": req.file.fileId}
 

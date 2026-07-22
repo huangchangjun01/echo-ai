@@ -84,6 +84,88 @@ def _repair_json(text: str) -> str:
 
 # ---------- LLM 抽取 ----------
 
+def _normalize_fact_item(it: Any) -> dict | None:
+    """把 LLM 输出的单条记忆规整成统一结构；非法条目返回 None。"""
+    if not isinstance(it, dict):
+        return None
+    fact = (it.get("fact") or "").strip()
+    if not fact:
+        return None
+    return {
+        "fact": fact,
+        "causes": (it.get("causes") or "").strip(),
+        "level": (it.get("level") or "L1").upper(),
+        "emotion": (it.get("emotion") or "neutral").lower(),
+        "intensity": float(it.get("intensity", 0.0) or 0.0),
+        "relation": (it.get("relation") or "").lower(),
+    }
+
+
+def _parse_extracted_items(content: str, *, stage: str, log_extra: dict, t0: float) -> list[dict]:
+    """从 LLM 原始输出里解析出记忆数组（含 <think> 剥离 + 坏 JSON 修复兜底）。"""
+    cleaned = _strip_think(content or "")
+    m = re.search(r"\[[\s\S]*?\]", cleaned)
+    if not m:
+        logger.info(
+            f"{stage} empty list",
+            extra=merge_extra(
+                stage=stage,
+                event="empty",
+                raw_preview=(content or "")[:120],
+                cleaned_preview=(cleaned or "")[:120],
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                **log_extra,
+            ),
+        )
+        return []
+    try:
+        items = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        # 解析失败：先尝试状态机式修复（裸双引号场景），修复后再解析一次。
+        repaired = _repair_json(m.group(0))
+        try:
+            items = json.loads(repaired)
+            logger.info(
+                f"{stage} json repaired",
+                extra=merge_extra(
+                    stage=stage,
+                    event="repaired",
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                    **log_extra,
+                ),
+            )
+        except json.JSONDecodeError as e2:
+            log_exception(
+                logger,
+                f"{stage} JSON parse failed",
+                exc=e2,
+                level=logging.WARNING,
+                stage=stage,
+                event="parse_error",
+                raw_preview=(content or "")[:200],
+                cleaned_preview=(cleaned or "")[:200],
+                matched_preview=m.group(0)[:200],
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                **log_extra,
+            )
+            return []
+    if not isinstance(items, list):
+        return []
+    out = [x for x in (_normalize_fact_item(it) for it in items) if x]
+    logger.info(
+        f"{stage} ok",
+        extra=merge_extra(
+            stage=stage,
+            event="ok",
+            count=len(out),
+            raw_items=len(items),
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            **log_extra,
+        ),
+    )
+    return out
+
+
 async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
     from llm.client import get_llm_client
     from config.prompts import MEMORY_EXTRACT_SYSTEM, MEMORY_EXTRACT_USER_TEMPLATE
@@ -91,6 +173,10 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
     client = get_llm_client()
     prompt_user = MEMORY_EXTRACT_USER_TEMPLATE.format(user_msg=user_msg, assistant_msg=assistant_msg)
     t0 = time.perf_counter()
+    log_extra = {
+        "user_msg_len": len(user_msg or ""),
+        "assistant_msg_len": len(assistant_msg or ""),
+    }
     try:
         resp = await client.chat(
             [
@@ -101,89 +187,7 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
             temperature=0.2,
         )
         content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-        # 推理型模型（MiniMax-M3）输出会在 JSON 答案前先吐 <think>...</think> 块；
-        # 若不剥掉，思考块里夹带的方括号（如示例编号）会让贪婪正则把思考块连同 JSON
-        # 一起吞掉，导致 json.loads 解析失败。这里先剥思考块再匹配 JSON。
-        cleaned = _strip_think(content or "")
-        m = re.search(r"\[[\s\S]*?\]", cleaned)
-        if not m:
-            logger.info(
-                "llm_extract empty list",
-                extra=merge_extra(
-                    stage="llm_extract",
-                    event="empty",
-                    raw_preview=(content or "")[:120],
-                    cleaned_preview=(cleaned or "")[:120],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                ),
-            )
-            return []
-        try:
-            items = json.loads(m.group(0))
-        except json.JSONDecodeError as e:
-            # 解析失败：先尝试状态机式修复（裸双引号场景），修复后再解析一次。
-            # 修复成功则走主流程，避免整段对话记忆全丢；修复仍失败再记录 + 返回空。
-            raw_span = m.group(0) if m else ""
-            repaired = _repair_json(raw_span)
-            try:
-                items = json.loads(repaired)
-                logger.info(
-                    "llm_extract json repaired",
-                    extra=merge_extra(
-                        stage="llm_extract",
-                        event="repaired",
-                        user_msg_len=len(user_msg or ""),
-                        assistant_msg_len=len(assistant_msg or ""),
-                        duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                    ),
-                )
-            except json.JSONDecodeError as e2:
-                # 解析失败：日志带上 cleaned 片段，便于定位 prompt / 模型问题。
-                log_exception(
-                    logger,
-                    "LLM extract JSON parse failed",
-                    exc=e2,
-                    level=logging.WARNING,
-                    stage="llm_extract",
-                    event="parse_error",
-                    user_msg_len=len(user_msg or ""),
-                    assistant_msg_len=len(assistant_msg or ""),
-                    raw_preview=(content or "")[:200],
-                    cleaned_preview=(cleaned or "")[:200],
-                    matched_preview=(m.group(0) if m else "")[:200],
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                )
-                return []
-        if not isinstance(items, list):
-            return []
-        out = []
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            fact = (it.get("fact") or "").strip()
-            if not fact:
-                continue
-            out.append(
-                {
-                    "fact": fact,
-                    "causes": (it.get("causes") or "").strip(),
-                    "level": (it.get("level") or "L1").upper(),
-                    "emotion": (it.get("emotion") or "neutral").lower(),
-                    "intensity": float(it.get("intensity", 0.0) or 0.0),
-                    "relation": (it.get("relation") or "").lower(),
-                }
-            )
-        logger.info(
-            "llm_extract ok",
-            extra=merge_extra(
-                stage="llm_extract",
-                event="ok",
-                count=len(out),
-                raw_items=len(items),
-                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-            ),
-        )
-        return out
+        return _parse_extracted_items(content, stage="llm_extract", log_extra=log_extra, t0=t0)
     except Exception as e:
         log_exception(
             logger,
@@ -192,9 +196,54 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
             level=logging.WARNING,
             stage="llm_extract",
             event="error",
-            user_msg_len=len(user_msg or ""),
-            assistant_msg_len=len(assistant_msg or ""),
             duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            **log_extra,
+        )
+        return []
+
+
+async def _llm_extract_file(
+    file_name: str, modality: str, desc: str, parsed_content: str
+) -> list[dict]:
+    """从文件描述 + 解析内容抽取记忆（复用对话抽取的解析/修复逻辑）。"""
+    from llm.client import get_llm_client
+    from config.prompts import FILE_MEMORY_EXTRACT_SYSTEM, FILE_MEMORY_EXTRACT_USER_TEMPLATE
+
+    client = get_llm_client()
+    prompt_user = FILE_MEMORY_EXTRACT_USER_TEMPLATE.format(
+        file_name=file_name or "（未命名）",
+        modality=modality or "unknown",
+        desc=desc or "（无）",
+        parsed_content=(parsed_content or "（无）")[:4000],
+    )
+    t0 = time.perf_counter()
+    log_extra = {
+        "file_name": file_name,
+        "modality": modality,
+        "desc_len": len(desc or ""),
+        "content_len": len(parsed_content or ""),
+    }
+    try:
+        resp = await client.chat(
+            [
+                {"role": "system", "content": FILE_MEMORY_EXTRACT_SYSTEM},
+                {"role": "user", "content": prompt_user},
+            ],
+            max_tokens=600,
+            temperature=0.2,
+        )
+        content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return _parse_extracted_items(content, stage="llm_extract_file", log_extra=log_extra, t0=t0)
+    except Exception as e:
+        log_exception(
+            logger,
+            "LLM extract (file) failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="llm_extract_file",
+            event="error",
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            **log_extra,
         )
         return []
 
@@ -205,6 +254,7 @@ async def _vectorize_and_store(
     user_id: str,
     facts: list[str],
     base_metadata: dict,
+    role_id: str = "default",
 ) -> list[str]:
     """返回每条 fact 对应的 weaviate uuid。失败返回空 list。"""
     if not facts:
@@ -224,6 +274,7 @@ async def _vectorize_and_store(
             {
                 **base_metadata,
                 "userId": user_id,
+                "roleId": role_id,
                 "chunkIndex": i,
                 "factIndex": i,
             }
@@ -268,7 +319,7 @@ async def _vectorize_and_store(
 
 # ---------- 去重判重 ----------
 
-async def _dedup_one(user_id: str, fact: str, vector: list[float], threshold: float) -> dict:
+async def _dedup_one(user_id: str, fact: str, vector: list[float], threshold: float, role_id: str = "default") -> dict:
     """对单条 fact 与已有记忆做向量检索 + LLM 判重。返回 {"duplicate": bool, ...}。"""
     settings = get_settings().memory
     t0 = time.perf_counter()
@@ -285,7 +336,7 @@ async def _dedup_one(user_id: str, fact: str, vector: list[float], threshold: fl
             fact,
             5,
             _fixed_embed,
-            {"userId": user_id},
+            {"userId": user_id, "roleId": role_id},
         )
         docs = result.get("documents", [[]])[0]
         distances = result.get("distances", [[]])[0]
@@ -509,6 +560,7 @@ async def _archive(
     items: list[dict],
     vector_ids: list[str | None],
     summary: str,
+    role_id: str = "default",
 ) -> list[int]:
     """把抽取结果写回 MySQL。返回新插入的 memory id 列表。"""
     from database import execute, fetch_one
@@ -520,10 +572,10 @@ async def _archive(
         try:
             await execute(
                 """
-                INSERT INTO memories (user_id, level, content, summary, emotion_tag, emotion_intensity, importance)
-                VALUES (%s, 'L2', %s, %s, 'neutral', 0.0, 0.7)
+                INSERT INTO memories (user_id, role_id, level, content, summary, emotion_tag, emotion_intensity, importance)
+                VALUES (%s, %s, 'L2', %s, %s, 'neutral', 0.0, 0.7)
                 """,
-                (user_id, summary, summary),
+                (user_id, role_id, summary, summary),
             )
             row = await fetch_one("SELECT LAST_INSERT_ID() AS id")
             summary_id = int(row["id"]) if row else None
@@ -563,13 +615,14 @@ async def _archive(
         try:
             await execute(
                 """
-                INSERT INTO memories (user_id, level, content, summary, emotion_tag,
+                INSERT INTO memories (user_id, role_id, level, content, summary, emotion_tag,
                     emotion_intensity, vector_id, parent_id, importance,
                     memory_type, category, embedding_dim)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
+                    role_id,
                     level,
                     content,
                     None,
@@ -613,10 +666,10 @@ async def _archive(
             row = await fetch_one(
                 """
                 SELECT id FROM memories
-                WHERE user_id=%s AND level=%s AND id<%s
+                WHERE user_id=%s AND role_id=%s AND level=%s AND id<%s
                 ORDER BY id DESC LIMIT 1
                 """,
-                (user_id, item.get("level", "L1"), target_id),
+                (user_id, role_id, item.get("level", "L1"), target_id),
             )
             if row:
                 source_id = int(row["id"])
@@ -625,6 +678,9 @@ async def _archive(
                 cols = await _memory_relations_columns()
                 fields = ["user_id", "source_id", "target_id"]
                 values: list[Any] = [user_id, source_id, target_id]
+                if "role_id" in cols:
+                    fields.append("role_id")
+                    values.append(role_id)
                 if "relation" in cols:
                     fields.append("relation")
                     values.append(rel)
@@ -677,6 +733,7 @@ async def extract_and_archive(
     session_id: str,
     user_msg: str,
     assistant_msg: str,
+    role_id: str = "default",
 ) -> dict:
     """从一段对话抽取记忆并归档。返回 {count, inserted_ids, summary}。"""
     if not user_id or not (user_msg or assistant_msg):
@@ -717,6 +774,7 @@ async def extract_and_archive(
             it["fact"],
             v,
             settings.dedup_threshold,
+            role_id,
         )
         if decision.get("duplicate"):
             skipped += 1
@@ -748,13 +806,14 @@ async def extract_and_archive(
         user_id,
         [it["fact"] for it in deduped_items],
         {"source": "memory_extract", "sessionId": session_id},
+        role_id,
     )
 
     # 4) 摘要
     summary = await _summarize(user_id, [it["fact"] for it in deduped_items])
 
     # 5) MySQL 归档
-    inserted = await _archive(user_id, deduped_items, v_ids, summary)
+    inserted = await _archive(user_id, deduped_items, v_ids, summary, role_id)
     logger.info(
         "extract_and_archive done",
         extra=merge_extra(
@@ -781,6 +840,7 @@ async def extract_and_archive_async(
     session_id: str,
     user_msg: str,
     assistant_msg: str,
+    role_id: str = "default",
 ) -> None:
     """后台任务：异步执行抽取；落库抽取日志。"""
     from database import execute
@@ -828,7 +888,7 @@ async def extract_and_archive_async(
         )
 
     try:
-        result = await extract_and_archive(user_id, session_id, user_msg, assistant_msg)
+        result = await extract_and_archive(user_id, session_id, user_msg, assistant_msg, role_id)
         if log_id is not None:
             try:
                 from database import execute as _exe
@@ -901,3 +961,103 @@ async def extract_and_archive_async(
                     target_status="failed",
                     root_error=str(e)[:200],
                 )
+
+
+async def extract_from_file(
+    user_id: str,
+    role_id: str,
+    file_name: str,
+    modality: str,
+    desc: str,
+    parsed_content: str,
+    source_meta: dict | None = None,
+) -> dict:
+    """从「文件描述 + 内容解析」抽取记忆并归档到 memories（按角色隔离）。
+
+    与 extract_and_archive 复用同一套 去重 → 向量化 → 摘要 → 归档 流程，
+    仅抽取阶段换用文件专用 prompt。返回 {count, inserted_ids, summary}。
+    """
+    if not user_id or not (desc or parsed_content):
+        return {"count": 0, "inserted_ids": [], "summary": ""}
+
+    settings = get_settings().memory
+    t0 = time.perf_counter()
+
+    # 1) 抽取
+    items = await _llm_extract_file(file_name, modality, desc, parsed_content)
+    if not items:
+        logger.info(
+            "extract_from_file skip (no items)",
+            extra=merge_extra(
+                stage="extract_from_file",
+                event="empty",
+                user_id=user_id,
+                role_id=role_id,
+                file_name=file_name,
+                modality=modality,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            ),
+        )
+        return {"count": 0, "inserted_ids": [], "summary": ""}
+
+    # 2) 去重
+    from embedding.bge_m3 import embed_texts
+
+    facts = [it["fact"] for it in items]
+    vectors = await asyncio.to_thread(embed_texts, facts)
+    deduped_items: list[dict] = []
+    skipped = 0
+    for i, it in enumerate(items):
+        v = vectors[i] if i < len(vectors) else []
+        decision = await _dedup_one(user_id, it["fact"], v, settings.dedup_threshold, role_id)
+        if decision.get("duplicate"):
+            skipped += 1
+            continue
+        new_it = dict(it)
+        new_it["fact"] = decision.get("merged") or it["fact"]
+        rel = decision.get("relation") or it.get("relation") or ""
+        if rel:
+            new_it["relation"] = rel
+        deduped_items.append(new_it)
+
+    if not deduped_items:
+        logger.info(
+            "extract_from_file all duplicated",
+            extra=merge_extra(
+                stage="extract_from_file",
+                event="all_dup",
+                user_id=user_id,
+                role_id=role_id,
+                extracted=len(items),
+                skipped=skipped,
+            ),
+        )
+        return {"count": 0, "inserted_ids": [], "summary": ""}
+
+    # 3) 向量化 + weaviate（EchoMemory）
+    base_meta = {"source": "file_ingest", **(source_meta or {})}
+    v_ids = await _vectorize_and_store(
+        user_id, [it["fact"] for it in deduped_items], base_meta, role_id
+    )
+
+    # 4) 摘要 + 5) MySQL 归档
+    summary = await _summarize(user_id, [it["fact"] for it in deduped_items])
+    inserted = await _archive(user_id, deduped_items, v_ids, summary, role_id)
+    logger.info(
+        "extract_from_file done",
+        extra=merge_extra(
+            stage="extract_from_file",
+            event="end",
+            user_id=user_id,
+            role_id=role_id,
+            file_name=file_name,
+            modality=modality,
+            extracted=len(items),
+            kept=len(deduped_items),
+            skipped=skipped,
+            inserted=len(inserted),
+            summary_len=len(summary),
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+        ),
+    )
+    return {"count": len(inserted), "inserted_ids": inserted, "summary": summary}

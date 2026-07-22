@@ -42,6 +42,7 @@ class MemoryVectorStore:
         {"name": "text", "dataType": ["text"]},
         {"name": "metadata", "dataType": ["text"]},
         {"name": "userId", "dataType": ["text"], "indexFilterable": True},
+        {"name": "roleId", "dataType": ["text"], "indexFilterable": True},
         {"name": "memoryId", "dataType": ["int"]},
         {"name": "level", "dataType": ["text"]},
         {"name": "emotion", "dataType": ["text"]},
@@ -110,6 +111,7 @@ class MemoryVectorStore:
                     "text": text,
                     "metadata": json.dumps(md, ensure_ascii=False),
                     "userId": md.get("userId", md.get("user_id", "")),
+                    "roleId": md.get("roleId", md.get("role_id", "default")) or "default",
                     "memoryId": int(md.get("memoryId", md.get("memory_id", 0)) or 0),
                     "level": md.get("level", "L1"),
                     "emotion": md.get("emotion", "neutral"),
@@ -174,7 +176,7 @@ class MemoryVectorStore:
         fetch_limit = max(int(n_results) * 10, 20)
         # EchoMemory has no fileId/fileName/chunkIndex — only memory-specific fields.
         memory_fields = (
-            "text metadata userId memoryId level emotion _additional { id distance }"
+            "text metadata userId roleId memoryId level emotion _additional { id distance }"
         )
         query = _build_search_query(
             self.class_name, list(q_emb), fetch_limit, where, fields=memory_fields

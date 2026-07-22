@@ -71,7 +71,7 @@ def _escape(value: Any) -> str:
 # Default document fields for the document store (EchoDoc).
 # Memory store uses a different schema and passes its own list.
 _DEFAULT_DOC_FIELDS = (
-    "text metadata fileId fileName userId chunkIndex _additional { id distance }"
+    "text metadata fileId fileName userId roleId chunkIndex _additional { id distance }"
 )
 
 
@@ -303,6 +303,7 @@ class WeaviateVectorStore:
         {"name": "fileId", "dataType": ["text"], "indexFilterable": True},
         {"name": "fileName", "dataType": ["text"]},
         {"name": "userId", "dataType": ["text"], "indexFilterable": True},
+        {"name": "roleId", "dataType": ["text"], "indexFilterable": True},
         {"name": "chunkIndex", "dataType": ["int"]},
     )
 
@@ -367,6 +368,7 @@ class WeaviateVectorStore:
                     "fileId": md.get("fileId", ""),
                     "fileName": md.get("fileName", ""),
                     "userId": md.get("userId", ""),
+                    "roleId": md.get("roleId", md.get("role_id", "default")) or "default",
                     "chunkIndex": int(md.get("chunkIndex", 0) or 0),
                 },
                 "vector": list(map(float, vector)),
@@ -509,7 +511,7 @@ class WeaviateVectorStore:
                 meta = json.loads(item.get("metadata") or "{}")
             except Exception:
                 meta = {}
-            for key in ("fileId", "fileName", "userId", "chunkIndex"):
+            for key in ("fileId", "fileName", "userId", "roleId", "chunkIndex"):
                 if key in item and key not in meta:
                     meta[key] = item[key]
             meta["similarity"] = round(similarity, 4)
