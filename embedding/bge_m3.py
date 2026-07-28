@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import threading
 import time
 
@@ -23,6 +24,18 @@ logger = logging.getLogger(__name__)
 _model_lock = threading.Lock()
 _model = None
 _model_loaded = False
+
+
+def _apply_endpoint_env(cfg) -> None:
+    """把配置中的 HF 镜像写到进程环境变量，覆盖 huggingface_hub 的默认 endpoint。
+
+    必须在第一次触发 HF 请求之前调用，否则对应 httpx 客户端已经用旧 endpoint 起好。
+    """
+    if cfg.endpoint:
+        # 只有当用户没显式设置过 HF_ENDPOINT 时才覆盖，方便在 shell 里手动改
+        os.environ.setdefault("HF_ENDPOINT", cfg.endpoint)
+    if cfg.download_timeout:
+        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(cfg.download_timeout))
 
 
 def _fallback_embed(texts: list[str], dim: int) -> list[list[float]]:
@@ -73,6 +86,7 @@ def _load_model():
         if _model_loaded:
             return _model
         cfg = get_settings().bge_m3
+        _apply_endpoint_env(cfg)
         resolved = _resolve_device(cfg.device)
         t0 = time.perf_counter()
         try:
@@ -85,9 +99,16 @@ def _load_model():
                     event="start",
                     model=cfg.model,
                     device=resolved,
+                    endpoint=cfg.endpoint or os.environ.get("HF_ENDPOINT"),
+                    local_files_only=cfg.local_files_only,
                 ),
             )
-            _model = SentenceTransformer(cfg.model, device=resolved)
+            _model = SentenceTransformer(
+                cfg.model,
+                device=resolved,
+                cache_folder=None,
+                local_files_only=cfg.local_files_only,
+            )
             logger.info(
                 "BGE-M3 model loaded",
                 extra=merge_extra(
@@ -108,6 +129,8 @@ def _load_model():
                 event="fallback",
                 model=cfg.model,
                 device=resolved,
+                endpoint=cfg.endpoint or os.environ.get("HF_ENDPOINT"),
+                local_files_only=cfg.local_files_only,
                 duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
             _model = None

@@ -613,6 +613,53 @@ async def chat_stream(
         final_messages.append(
             {"role": "system", "content": f"【L1 检索预注入】\n{l1_hint or '（无）'}"}
         )
+
+    # 回忆记忆注入：在对话回复生成前，从 EchoRecall 检索 top5 摘要，按需注入到 system。
+    # 注意：与现有 L0/L1 对话记忆**完全隔离**；回忆记忆永不遗忘，本处只读不写。
+    try:
+        from biz.recall_search import search_recall_for_chat
+        recall_hits = await search_recall_for_chat(user_id, role_id, user_msg, top_k=5)
+        if recall_hits:
+            # 把每条摘要编成「事实清单」+「允许引用的事实」+「禁止编造」的格式
+            bullets = []
+            cited = []
+            for i, h in enumerate(recall_hits, 1):
+                topic = (h.get("topic") or "").strip()
+                summary = (h.get("summary") or "").strip()
+                sim = h.get("similarity", 0.0)
+                bullets.append(
+                    f"{i}. (相关度 {sim:.2f}) 主题「{topic}」\n   摘要原文：{summary}"
+                )
+                # 摘要中明确出现的人物/地点/时间/事件关键词作为可引用事实
+                cited.append(f"  - {topic}: {summary}")
+            bullets_text = "\n".join(bullets)
+            cited_text = "\n".join(cited)
+
+            final_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "【用户历史回忆检索结果（按相关度排序，来自各记忆主题 {memoryId}.md 文档的摘要层）】\n\n"
+                        f"{bullets_text}\n\n"
+                        "【引用规则——严格遵守，违反即视为编造】\n"
+                        "1. 只能引用上方摘要原文里**明确出现**的人物、地点、时间、事件、对话、物件。\n"
+                        "2. **严禁添加摘要中没有的细节**，包括但不限于：\n"
+                        "   - 称谓关系：「女朋友/男朋友/老公/老婆/父母/朋友」——摘要未明确出现则一律用「对方/同伴」或不加称谓\n"
+                        "   - 具体姓名、地点、时间、数字——摘要没说就是「未知/不记得」\n"
+                        "   - 后续剧情、情绪状态、原因推测——基于摘要明文，禁止外推\n"
+                        "3. 引用方式：必须以「根据你之前记录的『{topic}』」或类似措辞开头，把摘要内容融入回复。\n"
+                        "4. 摘要信息不足时（如只记得去过某地），直接说「这部分我记忆里没详细记录」，引导用户补充。\n"
+                        "5. 不同摘要之间的人物/事件**禁止交叉混用**——A 摘要里的「我」和 B 摘要里的「我」不能等同。\n"
+                        "6. 若多条摘要与当前对话都无关（相似度都低或主题不匹配），就当没有这条记忆，正常聊。\n\n"
+                        "【本轮可引用的事实清单（按摘要原文逐条）】\n"
+                        f"{cited_text}"
+                    ),
+                }
+            )
+    except Exception:
+        # 回忆检索失败不应影响主对话
+        pass
+
     final_messages.append({"role": "user", "content": user_msg})
     final_messages += tool_turns
     if tool_turns:
@@ -653,6 +700,23 @@ async def chat_stream(
         ),
     )
     yield {"type": "done", "full": final_text}
+
+    # 落库到 chat_messages（对话记忆），fire-and-forget 不阻塞 SSE
+    try:
+        from biz.chat_memory import append_message, bump_retain, upsert_session
+
+        async def _record() -> None:
+            try:
+                await append_message(session_id, user_id, role_id, "user", user_msg)
+                await append_message(session_id, user_id, role_id, "assistant", final_text)
+                await upsert_session(user_id, role_id, session_id, msg_count_delta=2)
+                await bump_retain(session_id)
+            except Exception:
+                pass
+
+        asyncio.create_task(_record())
+    except Exception:
+        pass
 
 
 async def chat_collect(user_id: str, session_id: str, user_msg: str, role_id: str = "default") -> dict:
