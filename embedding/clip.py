@@ -45,7 +45,7 @@ def embed_images(images: Sequence[bytes | Any]) -> list[list[float]]:
             count=len(images),
             dim=cfg.dim,
             model=cfg.model_name,
-            device=cfg.device,
+            device=resolved,
         )
         return [[0.0] * cfg.dim for _ in images]
 

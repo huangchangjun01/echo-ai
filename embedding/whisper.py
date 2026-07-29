@@ -13,22 +13,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import time
 
 from config.config import get_settings
 from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
-
-
-def _apply_endpoint_env() -> None:
-    """参见 embedding.bge_m3._apply_endpoint_env。"""
-    cfg = get_settings().embedding
-    if cfg.endpoint:
-        os.environ.setdefault("HF_ENDPOINT", cfg.endpoint)
-    if cfg.download_timeout:
-        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(cfg.download_timeout))
 
 
 def _fallback_embedding(text: str, dim: int) -> list[float]:
@@ -46,10 +36,6 @@ def _transcribe(audio_bytes: bytes) -> str:
         import io
 
         import whisper  # type: ignore
-
-        # 必须在 whisper.load_model 之前把 HF 镜像设置好，否则它内部
-        # 下载权重时会直连 huggingface.co → SSL 失败。
-        _apply_endpoint_env()
 
         model = getattr(whisper, "_ECHO_MODEL", None)
         if model is None:

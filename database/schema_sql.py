@@ -87,42 +87,6 @@ DDL_STATEMENTS: tuple[str, ...] = (
         INDEX idx_emo_user (user_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
-    # ---------- 对话会话（短期对话记忆，毫秒级轻量沟通） ----------
-    """
-    CREATE TABLE IF NOT EXISTS chat_sessions (
-        id          BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        user_id     VARCHAR(128) NOT NULL,
-        role_id     VARCHAR(128) NOT NULL DEFAULT 'default',
-        session_id  VARCHAR(64) NOT NULL,
-        summary     TEXT NULL,
-        last_msg_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        msg_count   INT NOT NULL DEFAULT 0,
-        importance  FLOAT NOT NULL DEFAULT 0.3,
-        -- 遗忘权重：随时间衰减（decay_factor），按访问频率/重要性累加保留权重
-        retain_score FLOAT NOT NULL DEFAULT 1.0,
-        archived    TINYINT(1) NOT NULL DEFAULT 0,
-        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uk_session (session_id),
-        INDEX idx_chsess_user_retain (user_id, role_id, retain_score, last_msg_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """,
-    # ---------- 对话消息（多轮上下文缓冲） ----------
-    """
-    CREATE TABLE IF NOT EXISTS chat_messages (
-        id          BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        session_id  VARCHAR(64) NOT NULL,
-        user_id     VARCHAR(128) NOT NULL,
-        role_id     VARCHAR(128) NOT NULL DEFAULT 'default',
-        role        VARCHAR(16) NOT NULL,
-        content     TEXT NOT NULL,
-        token_count INT NOT NULL DEFAULT 0,
-        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_chmsg_session (session_id, created_at),
-        INDEX idx_chmsg_user_role (user_id, role_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """,
 )
 
 

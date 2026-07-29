@@ -5,7 +5,6 @@ import ipaddress
 import logging
 import socket
 from collections.abc import Iterable
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -88,13 +87,8 @@ async def download_file_async(
     max_bytes: int | None = None,
     timeout: float | None = None,
     allowed_subdomains: Iterable[str] | None = None,
-    verify_ssl: bool = True,
 ) -> bytes:
-    """Streamed async download with size guard and SSRF checks.
-
-    verify_ssl=False 仅用于对象存储 CDN 子域的 HTTPS 证书可能与 host 不匹配的场景
-    （如 Qiniu `*.clouddn.com` 子域）。其它场景必须保持 True。
-    """
+    """Streamed async download with size guard and SSRF checks."""
     settings = get_settings()
     if not url.startswith(("http://", "https://")):
         url = "http://" + url
@@ -124,8 +118,7 @@ async def download_file_async(
     chunks: list[bytes] = []
     total = 0
     timeout_cfg = httpx.Timeout(timeout_s, connect=10.0)
-    # http2=False：避免 Qiniu CDN 触发 HTTP/2 negotiation 后返回 421 Misdirected Request
-    async with httpx.AsyncClient(timeout=timeout_cfg, follow_redirects=True, verify=verify_ssl, http2=False) as client:
+    async with httpx.AsyncClient(timeout=timeout_cfg, follow_redirects=True) as client:
         async with client.stream("GET", url) as resp:
             if resp.status_code >= 400:
                 raise DownloadError(f"HTTP {resp.status_code} for {url}")
@@ -142,48 +135,6 @@ async def download_file_async(
     return b"".join(chunks)
 
 
-def download_file(url: str, *, max_bytes: int | None = None, timeout: float | None = None, verify_ssl: bool = True) -> bytes:
+def download_file(url: str, *, max_bytes: int | None = None, timeout: float | None = None) -> bytes:
     """Synchronous wrapper for legacy call sites and tests."""
-    return asyncio.run(download_file_async(url, max_bytes=max_bytes, timeout=timeout, verify_ssl=verify_ssl))
-
-
-async def fetch_source_bytes(
-    file_key: str | None,
-    url: str | None,
-    *,
-    max_bytes: int | None = None,
-    timeout: float | None = None,
-) -> bytes:
-    """下载源文件字节：优先 fileKey 直连七牛私有空间（权威、稳定），失败再退回前端 url。
-
-    为什么优先 fileKey：前端传来的 url 可能是 dev server / SPA fallback / 404 页，
-    直接下载会把 HTML 当成源文件内容写进记忆 md（本次缺陷根因）。用 fileKey
-    直连对象存储可根治，url 仅作无 fileKey 时的兜底。text/image/audio/video
-    全部走本函数，保持解析链路对"错误 url"免疫。
-    """
-    # 1) fileKey 优先：直连七牛私有空间（download_object_bytes 已处理 CDN 421 / 证书链问题）
-    if file_key:
-        try:
-            from storage.qiniu_client import download_object_bytes
-
-            kwargs: dict[str, Any] = {}
-            if max_bytes is not None:
-                kwargs["max_bytes"] = max_bytes
-            if timeout is not None:
-                kwargs["timeout"] = timeout
-            return await download_object_bytes(file_key, **kwargs)
-        except Exception as e:
-            log_silent_failure(
-                logger,
-                "fileKey 下载失败，回退前端 url",
-                exc=e,
-                stage="downloader_source",
-                event="filekey_fallback",
-                file_key=file_key,
-            )
-
-    # 2) url 兜底
-    if url:
-        return await download_file_async(url, max_bytes=max_bytes, timeout=timeout)
-
-    raise DownloadError("fetch_source_bytes: 既无 file_key 也无 url")
+    return asyncio.run(download_file_async(url, max_bytes=max_bytes, timeout=timeout))
