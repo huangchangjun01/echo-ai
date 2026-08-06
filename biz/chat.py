@@ -38,16 +38,22 @@ _INTENT_TOOL_HINT: dict[Intent, str] = {
     Intent.RECALL: (
         "【意图偏好】用户希望『回忆 / 翻历史』。"
         "请优先调用 search_memory 检索 EchoMemory + EchoDoc 中保存的相关记忆，"
-        "拿到命中后再用自然语言整理。不要调用 understand_image / understand_audio。"
+        "拿到命中后再用自然语言整理。"
+        "**当摘要不够、需要细节时（如『那天具体做了什么』『当时穿什么』），"
+        "对 search_memory 命中返回的 memory_id 调用 read_memory_full 拉回整段 .md 原文，"
+        "再基于完整内容回答。**"
+        "不要调用 understand_image / understand_audio。"
     ),
     Intent.TEXT_SEARCH: (
         "【意图偏好】用户希望『按文搜文』。"
         "请优先调用 search_memory（文本向量检索路径），命中后整合成回答；"
+        "若摘要不足，可对命中 memory_id 调用 read_memory_full 拉回完整 .md 原文；"
         "若命中附带可下载的图片/视频 URL，可视情况再调用 understand_image 复述内容。"
     ),
     Intent.DOC_SEARCH: (
         "【意图偏好】用户希望『按主题找文件 / 合同 / 资料』。"
         "请优先调用 search_memory（重点走 EchoDoc 文档集合）；"
+        "若需要进一步读完整内容，对命中 memory_id 调用 read_memory_full；"
         "若需要再次确认图片/截图内容，再调用 understand_image。"
     ),
     Intent.IMAGE_SEARCH: (
@@ -305,6 +311,16 @@ def _tool_result_to_text(name: str, result: dict) -> str:
         intensity = data.get("intensity", 0.0)
         reason = data.get("reason", "")
         return f"[emotion] {emo} (intensity={intensity:.2f}) {reason}".strip()
+    if name == "read_memory_full":
+        topic = data.get("topic") or "?"
+        md_len = data.get("md_len", 0)
+        truncated = data.get("truncated", False)
+        # md_content 已经是 .md 原文，**直接喂回 LLM**，不要二次截断
+        # 已在工具内部做过 _MAX_MD_CHARS 截断
+        md = data.get("md_content") or ""
+        head = f"[memory full · {topic} · {md_len} chars"
+        head += " · truncated]" if truncated else "]"
+        return f"{head}\n{md}".strip()
     return f"[tool:{name}] {json.dumps(data, ensure_ascii=False)[:300]}"
 
 
@@ -385,11 +401,13 @@ async def _resolve_tools(
 
         name = call.get("tool")
         args = call.get("args") or {}
-        # 把 user_id / session_id 注入到工具入参（不影响其他参数）
+        # 把 user_id / session_id 注入到工具入参。
+        # **安全规则**：user_id 一律用 session 里的真值覆盖，不接受 LLM 提交的值。
+        # LLM 经常给占位符（"current_user"/"default"），照单全收会导致跨用户访问 / 鉴权失败。
         if isinstance(args, dict):
-            args.setdefault("user_id", user_id)
-            args.setdefault("session_id", session_id)
-            args.setdefault("role_id", role_id)
+            args["user_id"] = user_id
+            args["session_id"] = session_id
+            args["role_id"] = role_id
 
         logger.info(
             "react iter dispatch",
@@ -575,15 +593,69 @@ async def chat_stream(
         ),
     )
 
+    # 回忆记忆注入：在「ReAct 工具决策 + 最终回复」之前先做一次 EchoRecall 检索。
+    # 这样 LLM 在工具决策阶段就能拿到 memoryId，**才会**主动调 read_memory_full 拿完整 .md；
+    # 同样的摘要会再注入到 final_messages 给 cascade 用。
+    # 注意：与现有 L0/L1 对话记忆**完全隔离**；回忆记忆永不遗忘，本处只读不写。
+    recall_hits: list[dict[str, Any]] = []
+    try:
+        from biz.recall_search import search_recall_for_chat
+        recall_hits = await search_recall_for_chat(user_id, role_id, user_msg, top_k=5)
+    except Exception as e:  # noqa: BLE001
+        log_exception(
+            logger,
+            "recall search during tool-resolve failed (non-fatal)",
+            exc=e,
+            level=logging.WARNING,
+            stage="chat_stream",
+            event="recall_search_error",
+        )
+
+    # 把"含 memoryId 的摘要"和"工具可用性提醒"塞进 ReAct 决策上下文。
+    # 这一段是 LLM 是否能正确调 read_memory_full 的关键。
+    recall_seed: list[dict[str, str]] = []
+    if recall_hits:
+        memory_ids: list[str] = []
+        bullets = []
+        for i, h in enumerate(recall_hits, 1):
+            topic = (h.get("topic") or "").strip()
+            summary = (h.get("summary") or "").strip()
+            sim = h.get("similarity", 0.0)
+            mid = (h.get("memoryId") or "").strip()
+            if mid:
+                memory_ids.append(mid)
+            bullets.append(
+                f"{i}. (相关度 {sim:.2f}) memoryId={mid} 主题「{topic}」\n   摘要原文：{summary}"
+            )
+        memory_id_list = ", ".join(memory_ids) if memory_ids else "（无）"
+        recall_seed.append(
+            {
+                "role": "system",
+                "content": (
+                    "【用户历史回忆检索结果（按相关度排序，来自各记忆主题的摘要层）】\n\n"
+                    f"{chr(10).join(bullets)}\n\n"
+                    "【memoryId 列表——如需展开完整 .md，可直接使用】\n"
+                    f"{memory_id_list}\n\n"
+                    "【重要】\n"
+                    "1) 上面每条**只是摘要**——只含大致信息；具体的时间、地点、人物、对话、细节都在各 memoryId 对应的 .md 完整内容里。\n"
+                    "2) **当用户问题需要摘要之外的细节时**（『具体几号』『当时穿什么』『还出现了谁』『那天具体做了什么』等），"
+                    "**必须先调 read_memory_full**(memory_id=<上表 32 位 hex>, user_id=<当前用户>) 拿完整 .md，**再**基于完整内容作答。\n"
+                    "3) **禁止基于摘要凭空编造细节**；不要先回答『我不知道』再给细节，要先用工具拿真实内容。\n"
+                    "4) read_memory_full 是为『已有命中、需要展开细节』场景设计的；不要用它去搜索新主题，搜索仍走 search_memory。"
+                ),
+            }
+        )
+
     # ReAct 总是跑：即便意图是 CHAT，也给 LLM 一次机会决定要不要调工具。
     # LLM 不调 → 走纯聊天快速路径；调了 → 拿到 tool_turns 进入最终生成。
     # （规则快速路径识别出的寒暄已通过 tool_seed 的 system 提示引导，LLM 几乎不会误调。）
     tool_log: list[dict[str, Any]] = []
     tool_turns: list[dict[str, str]] = []
+    react_messages = list(tool_seed) + recall_seed
     tool_log, tool_turns = await _resolve_tools(
         user_id=user_id,
         session_id=session_id,
-        messages=tool_seed,
+        messages=react_messages,
         max_iter=settings.react_max_iter,
         role_id=role_id,
     )
@@ -613,13 +685,69 @@ async def chat_stream(
         final_messages.append(
             {"role": "system", "content": f"【L1 检索预注入】\n{l1_hint or '（无）'}"}
         )
+
+    # 把"含 memoryId 的摘要"也注入到 cascade 的 final_messages，与 ReAct 决策阶段一致。
+    # 这样最终生成时也能看到 memoryId，并在 tool_turns 里"已经看到 read_memory_full 全文"时引用。
+    if recall_hits:
+        # 复用上面的 bullets 重新拼一份（结构与上面 recall_seed 保持一致，便于 LLM 串联两个阶段的理解）
+        bullets = []
+        cited = []
+        memory_ids: list[str] = []
+        for i, h in enumerate(recall_hits, 1):
+            topic = (h.get("topic") or "").strip()
+            summary = (h.get("summary") or "").strip()
+            sim = h.get("similarity", 0.0)
+            mid = (h.get("memoryId") or "").strip()
+            if mid:
+                memory_ids.append(mid)
+            bullets.append(
+                f"{i}. (相关度 {sim:.2f}) memoryId={mid} 主题「{topic}」\n   摘要原文：{summary}"
+            )
+            cited.append(f"  - {topic}: {summary}")
+        bullets_text = "\n".join(bullets)
+        cited_text = "\n".join(cited)
+        memory_id_list = ", ".join(memory_ids) if memory_ids else "（无）"
+
+        final_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "【用户历史回忆检索结果（按相关度排序，来自各记忆主题的摘要层）】\n\n"
+                        f"{bullets_text}\n\n"
+                        "【memoryId 列表——如需展开完整 .md，可直接使用】\n"
+                        f"{memory_id_list}\n\n"
+                        "【引用规则——严格遵守，违反即视为编造】\n"
+                        "1. 只能引用上方摘要原文里**明确出现**的人物、地点、时间、事件、对话、物件。\n"
+                        "2. **严禁添加摘要中没有的细节**——除非上方的 tool_turns 已经通过 read_memory_full 拉回了完整 .md 原文，"
+                        "再基于原文作答。\n"
+                        "   - 称谓关系：「女朋友/男朋友/老公/老婆/父母/朋友」——摘要未明确出现则一律用「对方/同伴」或不加称谓\n"
+                        "   - 具体姓名、地点、时间、数字——摘要没说就是「未知/不记得」\n"
+                        "   - 后续剧情、情绪状态、原因推测——基于摘要明文，禁止外推\n"
+                        "3. **何时调用 read_memory_full**：用户问题明显需要摘要之外的细节时（『具体几号』『当时穿什么』『还出现了谁』等），"
+                        "对相关 memoryId 调用 read_memory_full(memory_id=<上表中的 32 位 hex>, user_id=当前用户 ID) 拿完整 .md。\n"
+                        "4. 引用方式：必须以「根据你之前记录的『{topic}』」或类似措辞开头，把摘要/原文内容融入回复。\n"
+                        "5. 不同摘要之间的人物/事件**禁止交叉混用**——A 摘要里的「我」和 B 摘要里的「我」不能等同。\n"
+                        "6. 若多条摘要与当前对话都无关（相似度都低或主题不匹配），就当没有这条记忆，正常聊。\n\n"
+                        "【本轮可引用的事实清单（按摘要原文逐条）】\n"
+                        f"{cited_text}"
+                    ),
+                }
+            )
+
     final_messages.append({"role": "user", "content": user_msg})
     final_messages += tool_turns
     if tool_turns:
         final_messages.append(
             {
                 "role": "system",
-                "content": "基于以上工具返回的信息，用自然语言直接回复用户；不要再调用工具或输出 JSON。",
+                "content": (
+                    "【工具结果已就绪——请严格基于上方 [memory full · ...] 等工具返回的真实内容回答】\n"
+                    "1) **优先引用工具返回的原文细节**（特别是 read_memory_full 给的完整 .md 文本），"
+                    "不要被前文 system / L1 里的笼统描述带偏。\n"
+                    "2) 如果 read_memory_full 给了完整 .md，**必须**从中抽取用户问题涉及的具体时间/地点/人物/细节作答；"
+                    "不要再回答『记录里没有』或『我不记得』。\n"
+                    "3) 用自然语言直接回复用户；不要再调用工具或输出 JSON。"
+                ),
             }
         )
 
@@ -653,6 +781,23 @@ async def chat_stream(
         ),
     )
     yield {"type": "done", "full": final_text}
+
+    # 落库到 chat_messages（对话记忆），fire-and-forget 不阻塞 SSE
+    try:
+        from biz.chat_memory import append_message, bump_retain, upsert_session
+
+        async def _record() -> None:
+            try:
+                await append_message(session_id, user_id, role_id, "user", user_msg)
+                await append_message(session_id, user_id, role_id, "assistant", final_text)
+                await upsert_session(user_id, role_id, session_id, msg_count_delta=2)
+                await bump_retain(session_id)
+            except Exception:
+                pass
+
+        asyncio.create_task(_record())
+    except Exception:
+        pass
 
 
 async def chat_collect(user_id: str, session_id: str, user_msg: str, role_id: str = "default") -> dict:

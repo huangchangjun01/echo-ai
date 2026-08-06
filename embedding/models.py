@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import threading
 import time
 from collections.abc import Sequence
@@ -11,6 +12,7 @@ import torch
 from PIL import Image
 from transformers import ChineseCLIPModel, ChineseCLIPProcessor
 
+from config.config import get_settings
 from utils.request_context import merge_extra
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,15 @@ _model_lock = threading.Lock()
 _model: ChineseCLIPModel | None = None
 _processor: ChineseCLIPProcessor | None = None
 _device: torch.device | None = None
+
+
+def _apply_endpoint_env() -> None:
+    """参见 embedding.bge_m3._apply_endpoint_env。"""
+    cfg = get_settings().embedding
+    if cfg.endpoint:
+        os.environ.setdefault("HF_ENDPOINT", cfg.endpoint)
+    if cfg.download_timeout:
+        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(cfg.download_timeout))
 
 
 def detect_device(preferred: str = "auto") -> torch.device:
@@ -41,6 +52,8 @@ def _load_internal(device: str = "auto") -> tuple[ChineseCLIPModel, ChineseCLIPP
         if _model is None:
             target_device = detect_device(device)
             model_name = "OFA-Sys/chinese-clip-vit-base-patch16"
+            _apply_endpoint_env()
+            cfg = get_settings().embedding
             t0 = time.perf_counter()
             logger.info(
                 "loading Chinese-CLIP",
@@ -49,10 +62,18 @@ def _load_internal(device: str = "auto") -> tuple[ChineseCLIPModel, ChineseCLIPP
                     event="start",
                     model=model_name,
                     device=str(target_device),
+                    endpoint=cfg.endpoint or os.environ.get("HF_ENDPOINT"),
+                    local_files_only=cfg.local_files_only,
                 ),
             )
-            _model = ChineseCLIPModel.from_pretrained(model_name)
-            _processor = ChineseCLIPProcessor.from_pretrained(model_name)
+            _model = ChineseCLIPModel.from_pretrained(
+                model_name,
+                local_files_only=cfg.local_files_only,
+            )
+            _processor = ChineseCLIPProcessor.from_pretrained(
+                model_name,
+                local_files_only=cfg.local_files_only,
+            )
             _model.eval()
             _model.to(target_device)
             _device = target_device

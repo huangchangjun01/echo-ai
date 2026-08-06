@@ -28,6 +28,9 @@ cachetools>=5.3.0
 python-magic-bin>=0.4.14; sys_platform == "win32"
 python-magic>=0.4.27; sys_platform != "win32"
 
+# Object storage SDK (echo-ai 直传/删除对象，七牛)
+qiniu>=7.13.0
+
 # Tests
 pytest>=7.4.0
 pytest-asyncio>=0.23.0

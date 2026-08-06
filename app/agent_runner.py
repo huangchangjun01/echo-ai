@@ -24,7 +24,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from biz.chat import chat_collect, chat_stream
+from biz.chat_memory import start_gc_loop
 from biz.ingest import ingest_file
+from app.routers.recall import router as recall_router
 from config.config import get_settings
 from database import close_pool as close_db_pool, init_schema
 from embedding import bge_m3
@@ -137,6 +139,20 @@ async def lifespan(app: FastAPI):
         )
 
     app.state.settings = settings
+
+    # 启动对话记忆 GC 循环（半天一次）
+    try:
+        start_gc_loop(interval_seconds=6 * 3600)
+    except Exception as e:
+        log_exception(
+            logger,
+            "start_gc_loop failed (non-fatal)",
+            exc=e,
+            level=logging.WARNING,
+            stage="lifespan_start",
+            event="gc_loop_error",
+        )
+
     logger.info(
         "Echo-AI agent ready",
         extra=merge_extra(stage="lifespan_start", event="end", ok=True),
@@ -176,6 +192,9 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# 挂载回忆记忆路由（/memory/parse, /memory/source/delete, /memory/delete）
+app.include_router(recall_router)
 
 
 # ---------- 请求模型（仅对外暴露） ----------

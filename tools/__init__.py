@@ -1,4 +1,4 @@
-"""tools 包：4 个进程内工具的统一注册与执行。"""
+"""tools 包：5 个进程内工具的统一注册与执行。"""
 
 import json
 import logging
@@ -6,6 +6,7 @@ import time
 
 from .analyze_emotion import AnalyzeEmotionTool
 from .base import BaseTool, ToolResult, fail, ok
+from .read_memory_full import ReadMemoryFullTool
 from .search_memory import SearchMemoryTool
 from .understand_audio import UnderstandAudioTool
 from .understand_image import UnderstandImageTool
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "AnalyzeEmotionTool",
     "BaseTool",
+    "ReadMemoryFullTool",
     "SearchMemoryTool",
     "ToolResult",
     "UnderstandAudioTool",
@@ -141,9 +143,10 @@ async def adispatch(name: str, **kwargs) -> ToolResult:
         return fail(str(e))
 
 
-# ---------- 启动时注册默认 4 个工具 ----------
+# ---------- 启动时注册默认 5 个工具 ----------
 
 register_tool(UnderstandImageTool())
 register_tool(UnderstandAudioTool())
 register_tool(SearchMemoryTool())
+register_tool(ReadMemoryFullTool())
 register_tool(AnalyzeEmotionTool())

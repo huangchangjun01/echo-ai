@@ -24,12 +24,15 @@ class WeaviateSettings(BaseSettings):
     port: int = 8080
     class_name: str = Field("EchoDoc", alias="class")
     memory_class: str = Field("EchoMemory", alias="memoryClass")
+    # 回忆记忆向量集合（独立于 EchoDoc / EchoMemory）
+    recall_class: str = Field("EchoRecall", alias="recallClass")
     api_key: str | None = None
 
     # 阈值：CLIP 跨模态 cosine 通常 0.20~0.45，BGE-M3 文本相似 0.5~0.95。
     # 共用 0.7 会把 CLIP 命中全部过滤掉，因此按 collection 分开配置。
     doc_threshold: float = Field(0.25, ge=-1.0, le=1.0)
     memory_threshold: float = Field(0.7, ge=-1.0, le=1.0)
+    recall_threshold: float = Field(0.5, ge=-1.0, le=1.0)
 
     def resolved_host_port(self) -> tuple[str, int]:
         host = (self.host or "").strip()
@@ -61,6 +64,10 @@ class QiniuSettings(BaseSettings):
 
     base_url: str = ""
     allowed_subdomains: list[str] = Field(default_factory=list)
+    # 上传/删除凭证（与 echo-core 一致；echo-ai 直传/删除对象）
+    access_key: str = ""
+    secret_key: str = ""
+    bucket_name: str = ""
 
     @field_validator("allowed_subdomains", mode="before")
     @classmethod
@@ -128,6 +135,13 @@ class EmbeddingSettings(BaseSettings):
     chunk_size: int = 256
     chunk_overlap: int = 32
     warmup_on_start: bool = True
+    # HuggingFace 镜像，国内部署需要切到 hf-mirror.com，否则直连
+    # huggingface.co 会在 transformers 探测 PEFT adapter 的 HEAD 请求阶段 SSL 失败。
+    endpoint: str | None = None
+    # 强制只读本地缓存（模型已下到 ~/.cache/huggingface 时用）
+    local_files_only: bool = False
+    # 单次 HF 拉取超时（秒），避免在镜像不通时拉满 50s 重试窗口
+    download_timeout: int = 15
 
 
 class BGEM3Settings(BaseSettings):
@@ -138,6 +152,10 @@ class BGEM3Settings(BaseSettings):
     model: str = "BAAI/bge-m3"
     dim: int = 768
     device: str = "auto"
+    # 镜像端点：参见 EmbeddingSettings.endpoint
+    endpoint: str | None = None
+    local_files_only: bool = False
+    download_timeout: int = 15
 
 
 class MemorySettings(BaseSettings):
