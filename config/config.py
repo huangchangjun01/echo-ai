@@ -6,7 +6,6 @@ from typing import Any
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 _BASE_CONFIG = SettingsConfigDict(
     env_file=".env",
     env_file_encoding="utf-8",
@@ -87,6 +86,13 @@ class DBSettings(BaseSettings):
     name: str = "echo_ai"
     pool_min: int = 1
     pool_max: int = 10
+    # 空闲连接最长存活秒数。远端 MySQL / NAT / 防火墙会静默断开长时间空闲的 TCP 连接，
+    # 而 aiomysql 只能识别"已收到 FIN/RST"的连接，半开连接会被原样发出去，
+    # 导致下一条 SQL 一直阻塞到 OS 超时（Windows: WinError 121 信号灯超时时间已到）。
+    # 取值需明显小于 MySQL 的 wait_timeout 以及链路上 NAT 的空闲回收时间。
+    pool_recycle: int = 300
+    # 建连超时（秒）：避免网络异常时 connect 无限期挂起。
+    connect_timeout: int = 10
 
     def resolved_dsn(self) -> dict[str, Any]:
         return {
@@ -158,6 +164,35 @@ class BGEM3Settings(BaseSettings):
     download_timeout: int = 15
 
 
+class WhisperSettings(BaseSettings):
+    """本地音频转录（openai-whisper）。
+
+    `model` 是中文识别质量的**决定性因素**。曾经写死的 `base`（74M 多语种）在中文上
+    同音字选错极为严重——实测把"上吐下泻"识别成"上土下泄"、"一整晚"识别成"一整碗"。
+    档位对照（10s 音频、CPU 实测）：
+
+        base    1.7s  / ~0.15G  错别字多，不可用于中文
+        small   2.7s  / ~0.5G   基本正确
+        medium  9.2s  / ~1.5G   稳定正确（默认）
+        turbo   8.4s  / ~0.9G   实测反而不如 small，且加载极慢，不推荐
+
+    解析是后台任务，用户对延迟不敏感，故默认取 medium 换质量。
+    显存/内存吃紧时可用 `WHISPER_MODEL=small` 降档。
+    """
+
+    model_config = SettingsConfigDict(env_prefix="WHISPER_", **_BASE_CONFIG)
+
+    model: str = "medium"
+    # 显式指定语种可省掉一次语种自动检测（实测省约 1.4s），也避免短音频/嘈杂时
+    # 误判语种导致输出乱码。留空则回退为自动检测。
+    language: str = "zh"
+    # whisper 中文倾向输出繁体（small 以上尤其明显）。开启后用 opencc 做识别后的
+    # 确定性繁转简。注意：不要改用 initial_prompt 引导简体——实测那会干扰选字，
+    # 把"上吐下泻"带偏成"上吐下泄"。
+    simplified: bool = True
+    device: str = "auto"
+
+
 class MemorySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MEMORY_", **_BASE_CONFIG)
 
@@ -211,6 +246,7 @@ class Settings(BaseSettings):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     bge_m3: BGEM3Settings = Field(default_factory=BGEM3Settings)
+    whisper: WhisperSettings = Field(default_factory=WhisperSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
     app: AppSettings = Field(default_factory=AppSettings)

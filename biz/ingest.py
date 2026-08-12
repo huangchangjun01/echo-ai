@@ -664,7 +664,66 @@ async def _ingest_audio(
         ),
     )
     if not transcript:
-        return IngestResult(False, file_id, error="Empty audio transcript")
+        # 转录失败兜底：与 _ingest_image 的失败策略对齐——仍写一条占位 EchoDoc 并返回
+        # success=True，让 _maybe_generate_memory 走 desc/fileName 兜底生成基础记忆。
+        # 否则用户上传音频后没有任何记忆反馈，与"音频解析失败但至少要有个记录"的预期相违。
+        placeholder_text = f"[音频转录失败] {file_name}"
+        logger.warning(
+            "audio transcribe empty, fallback to placeholder",
+            extra=merge_extra(
+                stage="ingest_audio",
+                event="transcribe_empty",
+                file_id=file_id,
+                file_name=file_name,
+                url=url,
+                audio_bytes=len(data or b""),
+            ),
+        )
+        # 用占位文本编码出一个向量（避免零向量触发后续相似度异常）。
+        # compute_text_embeddings 已在模块顶部导入；这里不要再做 local import，
+        # 否则函数内 Python 会把该名视为 local，外部 success 路径访问时触发
+        # UnboundLocalError。
+        try:
+            vectors = await asyncio.to_thread(compute_text_embeddings, [placeholder_text])
+        except Exception as e:
+            log_exception(
+                logger,
+                "audio placeholder embedding failed",
+                exc=e,
+                stage="ingest_audio",
+                event="embed_error",
+                file_id=file_id,
+                url=url,
+            )
+            return IngestResult(False, file_id, error=f"Audio embedding failed: {e}")
+
+        metadata = {
+            "fileId": file_id,
+            "fileName": file_name,
+            "userId": user_id,
+            "roleId": role_id,
+            "sourceUrl": url,
+            "chunkIndex": 0,
+            "totalChunks": 1,
+            "modality": "audio",
+            "transcribeStatus": "failed",
+        }
+        try:
+            vectorstore.add_texts(ids=[file_id], texts=[placeholder_text], metadatas=[metadata], embeddings=vectors)
+        except Exception as e:
+            log_exception(
+                logger,
+                "vector store write failed",
+                exc=e,
+                stage="ingest_audio",
+                event="vector_write_error",
+                file_id=file_id,
+                url=url,
+            )
+            return IngestResult(False, file_id, error=f"Vector store failed: {e}")
+
+        # 关键：success=True 让 _maybe_generate_memory 仍能从 desc/fileName 兜底
+        return IngestResult(True, file_id, chunks=1, parsed_text=placeholder_text, modality="audio")
 
     try:
         vectors = await asyncio.to_thread(compute_text_embeddings, [transcript])

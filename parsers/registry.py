@@ -33,13 +33,31 @@ _EXT_TO_FILE_TYPE: dict[str, int] = {
 
 
 def _file_type_by_ext(file_name: str) -> int:
-    """按扩展名推断 fileType；无法识别返回 0。"""
+    """按扩展名推断 fileType；无法识别返回 0。
+
+    支持链式扩展名（如 ``拉师傅来我家的三年.mp3.mpeg``）：
+    - 先看最后一段（``mpeg``），不识别再向前看（``mp3``）。
+    - 这样用户把 MP3 文件改名加 ``.mpeg`` 后缀时，仍能正确归类为音频。
+    - 防御性兜底：最多向前回溯 3 段，避免异常文件名拖垮性能。
+    """
     if not file_name:
         return 0
-    _, ext = os.path.splitext(file_name)
-    if not ext:
-        return 0
-    return _EXT_TO_FILE_TYPE.get(ext.lower().lstrip("."), 0)
+    # 先按最后一段查一次
+    _, last_ext = os.path.splitext(file_name)
+    if last_ext:
+        ft = _EXT_TO_FILE_TYPE.get(last_ext.lower().lstrip("."), 0)
+        if ft:
+            return ft
+    # 链式扩展名兜底：从前到后逐段去掉后缀再查
+    stripped = file_name
+    for _ in range(3):  # 最多回溯 3 段，避免极端异常名
+        stripped, ext = os.path.splitext(stripped)
+        if not ext:
+            break
+        ft = _EXT_TO_FILE_TYPE.get(ext.lower().lstrip("."), 0)
+        if ft:
+            return ft
+    return 0
 
 
 def _resolve_file_type(file_name: str, declared: int) -> tuple[int, str]:

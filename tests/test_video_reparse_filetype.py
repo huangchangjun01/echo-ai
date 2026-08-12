@@ -132,3 +132,72 @@ async def test_parse_text_accepts_normal_utf8(monkeypatch: pytest.MonkeyPatch) -
 
     assert not parsed.meta.get("error")
     assert "拉师傅" in parsed.detail_md
+
+
+# ===== 防线 3：链式扩展名兜底（用户反馈：xxx.mp3.mpeg 被识别为未知） =====
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected"),
+    [
+        # 链式扩展名：最后一段未知时向前查已知段
+        ("拉师傅来我家的三年.mp3.mpeg", "audio"),  # 用户反馈的核心 case
+        ("song.mp3.bin", "audio"),
+        ("clip.mp4.tmp", "video"),
+        ("photo.jpg.bak", "image"),
+        ("note.txt.swp", "text"),
+        # 单段扩展名仍正常
+        ("normal.mp3", "audio"),
+        # 完全未知扩展名：兜底失效，回退到 declared（=1 文本）
+        ("normal.unknown", "text"),
+    ],
+)
+async def test_chained_extension_fallback(
+    recorder: _Recorder, file_name: str, expected: str
+) -> None:
+    """链式扩展名兜底：未知的最后一段向前查，已知段命中即按该模态分派。
+
+    对应用户反馈的 ``拉师傅来我家的三年.mp3.mpeg`` —— ``.mpeg`` 不在已知表里，
+    但向前查 ``.mp3`` 能识别为音频，避免被分派到文本解析器把二进制当文本喂给 LLM。
+    """
+    await registry.parse_file("k", file_name, 1, None)  # declared=1 文本，故意挑错
+    assert recorder.calls == [expected]
+
+
+# ===== 防线 4：parse_audio 转录失败时不再 hard-fail，写占位文本 =====
+
+
+async def test_parse_audio_empty_transcript_returns_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """音频转录返回空文本时，parse_audio 不再返回 error，而是写一条占位 ParsedFile，
+    让上层 parse_memory 仍能基于 file_name 与主观描述生成 md。
+
+    修复前的 bug：parse_audio 在 ``text == ""`` 时返回 ``meta={"error": "empty_transcript"}``，
+    被上游 ``_is_failed_parse`` 判定为失败 → ``parse_memory: all sources failed, skip md write``，
+    用户整个记忆主题没有任何 md 产物。
+    """
+    from embedding import whisper as whisper_mod
+    from parsers.audio_parser import parse_audio
+
+    async def _fake_fetch(file_key, url):  # noqa: ANN001
+        return b"\xff\xfb\x90\x00" + b"\x00" * 4096  # 模拟 MP3 字节
+
+    def _fake_transcribe(audio_bytes: bytes) -> str:
+        return ""  # 模拟 Whisper 转录失败
+
+    monkeypatch.setattr("parsers.audio_parser.fetch_source_bytes", _fake_fetch)
+    monkeypatch.setattr(whisper_mod, "_transcribe", _fake_transcribe)
+
+    parsed = await parse_audio("memory/u/r/m/abc.mp3", "voice.mp3.mpeg", None)
+
+    # 关键断言：不再有 error 标记（让 _is_failed_parse 判定为成功）
+    assert not parsed.meta.get("error"), (
+        f"音频转录失败应写占位文本，不再返回 error，实际 meta={parsed.meta}"
+    )
+    # 关键断言：占位文本包含文件名，让 LLM 至少能识别"用户上传了哪个音频"
+    assert "音频转录失败" in parsed.text
+    assert "voice.mp3.mpeg" in parsed.text
+    assert parsed.modality == "audio"
+    # 关键断言：detail_md 非空（让 build_memory_md 能写入对应小节）
+    assert parsed.detail_md and "音频转录失败" in parsed.detail_md
+    # 关键断言：标记 transcribeStatus="failed" 便于后续 RAG 召回过滤
+    assert parsed.meta.get("transcribeStatus") == "failed"

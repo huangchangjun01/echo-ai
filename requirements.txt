@@ -34,3 +34,18 @@ qiniu>=7.13.0
 # Tests
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
+
+# ---------- 音频转录（可选，缺失时音频会走"转录失败"占位兜底）----------
+# openai-whisper 用于本地转录音频；首次运行会自动下载模型权重。
+#   默认档位 medium（约 1.5GB）——base 在中文上同音字错误严重（实测把"上吐下泻"
+#   识别成"上土下泄"、"一整晚"识别成"一整碗"），不可用于中文。
+#   降档只需环境变量 WHISPER_MODEL=small，无需改代码。
+# imageio-ffmpeg 内置 ffmpeg 可执行文件，让 Windows 上无需单独装 ffmpeg。
+#   注意它装出来的文件叫 ffmpeg-win-x86_64-*.exe 而非 ffmpeg.exe，
+#   所以代码里按绝对路径调用，不依赖 PATH 的名字解析。
+# opencc 做繁转简：whisper 中文倾向输出繁体（small 以上尤其明显）。
+#   缺失时降级为不转换，不影响转录本身。
+# 安装方式：pip install openai-whisper imageio-ffmpeg opencc-python-reimplemented
+# openai-whisper>=20231117
+# imageio-ffmpeg>=0.5.0
+# opencc-python-reimplemented>=0.1.7

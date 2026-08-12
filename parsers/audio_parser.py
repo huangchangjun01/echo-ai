@@ -27,7 +27,28 @@ async def parse_audio(file_key: str, file_name: str, url: str | None) -> ParsedF
 
         text = await asyncio.to_thread(whisper._transcribe, raw)
         if not text.strip():
-            return ParsedFile(modality="audio", meta={"error": "empty_transcript"})
+            # 与 biz/ingest.py:_ingest_audio 对齐：转录失败不再返回 error，而是写一条
+            # 占位 ParsedFile（含 placeholder 文本），让上层 parse_memory 仍能基于
+            # file_name 与主观描述生成 md，否则用户上传音频后整个记忆 md 写入会被
+            # 整体跳过（"all sources failed, skip md write"）。
+            placeholder = f"[音频转录失败] {file_name}"
+            logger.warning(
+                "audio parse: transcribe empty, fallback to placeholder",
+                extra=merge_extra(
+                    stage="parser_audio",
+                    event="transcribe_empty",
+                    file_name=file_name,
+                    file_key=file_key or "",
+                    bytes=len(raw or b""),
+                ),
+            )
+            return ParsedFile(
+                modality="audio",
+                text=placeholder,
+                chunks=[ParsedChunk(text=placeholder, source=file_name)],
+                detail_md=placeholder,
+                meta={"bytes": len(raw), "transcribeStatus": "failed"},
+            )
         # 防御性截断（与视频解析同源修复：见 parsers/video_parser.py 注释）。
         truncated = len(text) > _MAX_AUDIO_DETAIL_CHARS
         capped = text[:_MAX_AUDIO_DETAIL_CHARS] if truncated else text

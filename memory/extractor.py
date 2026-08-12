@@ -528,6 +528,28 @@ async def _summarize(user_id: str, contents: list[str]) -> str:
 
 _VALID_LEVELS = {"L0", "L1", "L2"}
 
+
+def _is_placeholder_parsed_content(text: str) -> bool:
+    """判定 parsed_content 是否为「解析失败占位文本」（无任何真实信号）。
+
+    与 parsers/audio_parser.py:parse_audio 与 biz/ingest.py:_ingest_audio 中的占位
+    文案对齐：``[音频转录失败] {file_name}``。占位文本喂给 LLM 会触发幻觉（基于
+    文件名编造内容），所以这里直接判 False。
+
+    防御性扩展：未来若新增视频/图片解析失败的占位（如 ``[视频关键帧抽取失败]``），
+    只要加上对应前缀即可。
+    """
+    if not text:
+        return False
+    s = text.strip()
+    placeholders = (
+        "[音频转录失败]",
+        "[视频关键帧抽取失败]",
+        "[图片描述失败]",
+        "[文档解析失败]",
+    )
+    return any(s.startswith(p) for p in placeholders)
+
 # memory_relations 存在多种历史 schema：新表用 relation/weight，旧表用 relation_type/confidence，
 # 迁移后的表可能两套都在。缓存一次实际列名，据此拼 INSERT，避免盲试触发 1054/1364 错误。
 _REL_COLUMNS: set[str] | None = None
@@ -977,7 +999,28 @@ async def extract_from_file(
     与 extract_and_archive 复用同一套 去重 → 向量化 → 摘要 → 归档 流程，
     仅抽取阶段换用文件专用 prompt。返回 {count, inserted_ids, summary}。
     """
+    desc = (desc or "").strip()
+    parsed_content = (parsed_content or "").strip()
+
     if not user_id or not (desc or parsed_content):
+        return {"count": 0, "inserted_ids": [], "summary": ""}
+
+    # 防幻觉：转录失败的占位文本（如 "[音频转录失败] xxx.mp3"）不能喂给 LLM，
+    # 否则 LLM 会基于文件名编造"推测性内容"。当且仅当「desc 为空 + parsed_content
+    # 是占位文本」时直接跳过；用户提供的 desc 仍可走抽取（描述本身也是有效信号）。
+    if not desc and _is_placeholder_parsed_content(parsed_content):
+        logger.info(
+            "extract_from_file skip (transcribe failed placeholder, no desc)",
+            extra=merge_extra(
+                stage="extract_from_file",
+                event="placeholder_skip",
+                user_id=user_id,
+                role_id=role_id,
+                file_name=file_name,
+                modality=modality,
+                placeholder_preview=parsed_content[:80],
+            ),
+        )
         return {"count": 0, "inserted_ids": [], "summary": ""}
 
     settings = get_settings().memory

@@ -85,8 +85,19 @@ async def _parse_one(src: dict[str, Any]) -> tuple[str, ParsedFile]:
 
 
 def _is_failed_parse(p: ParsedFile) -> bool:
-    """判定一个 ParsedFile 是否解析失败（无文本、无 detail_md）。"""
+    """判定一个 ParsedFile 是否解析失败（无文本、无 detail_md）。
+
+    关键：除"完全无内容"外，**transcribeStatus="failed"** 也应判失败。
+    原因：parsers/audio_parser.parse_audio 在转录失败时虽写了占位 ParsedFile
+    （detail_md 非空，避免上层误判"完全无内容"），但占位文本（[音频转录失败] xxx）
+    喂给 build_memory_md 的 LLM 后会触发幻觉——LLM 基于占位 + 文件名编造
+    "宠物相处三年"等推测性内容（用户反馈的具体 case）。这里把转录失败明确判
+    失败，让 parse_memory 走 failed_sources 分支（要么整体 skip md write，要么
+    仅生成"失败清单"小节，绝不喂 LLM 拼 md）。
+    """
     if p.meta.get("error"):
+        return True
+    if p.meta.get("transcribeStatus") == "failed":
         return True
     if not (p.text or p.detail_md):
         return True
@@ -211,6 +222,12 @@ async def parse_memory(
                 if not any_ok:
                     failed_sources.append(name)
                 continue
+            # 防御性兜底：先调 _is_failed_parse 统一判定（含 transcribeStatus=failed
+            # 等非空占位场景），避免转录失败的占位 ParsedFile 走到 detail_md 分支
+            # 被当作有效内容喂给 build_memory_md 触发 LLM 幻觉。
+            if _is_failed_parse(p):
+                failed_sources.append(name)
+                continue
             if p.detail_md:
                 # 兜底：剥掉上游可能串入的 HTML 标签（如 LLM 把 SPA fallback 当图像描述）
                 clean_detail = _strip_html(p.detail_md)
@@ -225,8 +242,6 @@ async def parse_memory(
                     details.append({"fileName": name, "detail": capped})
                 else:
                     failed_sources.append(name)
-            elif _is_failed_parse(p):
-                failed_sources.append(name)
 
         # 当所有源都解析失败时，**绝不落盘**：空壳 md 会污染用户记忆库。
         # 直接标 FAILED，让前端提示用户重试或检查源文件。
