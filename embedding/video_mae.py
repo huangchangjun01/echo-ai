@@ -4,6 +4,8 @@
 - 任意失败均返回 CLIP 维度的零向量 + 关键帧描述文本，便于上层容错。
 
 实现简化：对输入视频做最多 8 帧均匀采样，用 CLIP 编码后取均值作为整体向量。
+- 视频模型无独立权重下载：关键帧走 `embedding.clip`（Chinese-CLIP），其权重
+  已纳入统一模型缓存目录管理（见 utils.model_cache），命中缓存全程离线加载。
 """
 
 from __future__ import annotations

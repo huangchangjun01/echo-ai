@@ -138,7 +138,8 @@ def test_transcribe_feeds_decoded_array_not_path(monkeypatch):
             return {"text": "  你好世界  "}
 
     fake_whisper = type(sys)("whisper")
-    fake_whisper.load_model = lambda name: _FakeModel()
+    # 真实 whisper.load_model 支持 download_root（模型缓存目录），mock 需兼容该 kwarg
+    fake_whisper.load_model = lambda name, **kwargs: _FakeModel()
     monkeypatch.setitem(sys.modules, "whisper", fake_whisper)
     monkeypatch.setattr(whisper_mod, "_resolve_ffmpeg", lambda: "ffmpeg-stub")
     monkeypatch.setattr(

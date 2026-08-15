@@ -13,6 +13,7 @@ from PIL import Image
 from transformers import ChineseCLIPModel, ChineseCLIPProcessor
 
 from config.config import get_settings
+from utils.model_cache import apply_hf_env, ensure_hf_model, resolve_hf_cache_root
 from utils.request_context import merge_extra
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,9 @@ _device: torch.device | None = None
 
 
 def _apply_endpoint_env() -> None:
-    """参见 embedding.bge_m3._apply_endpoint_env。"""
+    """固化 HF 镜像 / 超时 / 缓存根环境变量；必须在首次 HF 请求前调用。"""
     cfg = get_settings().embedding
-    if cfg.endpoint:
-        os.environ.setdefault("HF_ENDPOINT", cfg.endpoint)
-    if cfg.download_timeout:
-        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(cfg.download_timeout))
+    apply_hf_env(endpoint=cfg.endpoint, download_timeout=cfg.download_timeout)
 
 
 def detect_device(preferred: str = "auto") -> torch.device:
@@ -51,9 +49,13 @@ def _load_internal(device: str = "auto") -> tuple[ChineseCLIPModel, ChineseCLIPP
     with _model_lock:
         if _model is None:
             target_device = detect_device(device)
-            model_name = "OFA-Sys/chinese-clip-vit-base-patch16"
             _apply_endpoint_env()
             cfg = get_settings().embedding
+            model_name = cfg.model_name or "OFA-Sys/chinese-clip-vit-base-patch16"
+            # 缓存未命中且允许下载时先拉取到指定缓存目录；命中则直接本地加载。
+            if not cfg.local_files_only:
+                ensure_hf_model(model_name, endpoint=cfg.endpoint, download_timeout=cfg.download_timeout)
+            cache_dir = resolve_hf_cache_root()
             t0 = time.perf_counter()
             logger.info(
                 "loading Chinese-CLIP",
@@ -63,16 +65,20 @@ def _load_internal(device: str = "auto") -> tuple[ChineseCLIPModel, ChineseCLIPP
                     model=model_name,
                     device=str(target_device),
                     endpoint=cfg.endpoint or os.environ.get("HF_ENDPOINT"),
-                    local_files_only=cfg.local_files_only,
+                    cache_dir=cache_dir or "default",
+                    local_files_only=True,
                 ),
             )
+            # ensure_hf_model 已保证快照存在，这里 local_files_only=True 全程离线加载。
             _model = ChineseCLIPModel.from_pretrained(
                 model_name,
-                local_files_only=cfg.local_files_only,
+                cache_dir=cache_dir,
+                local_files_only=True,
             )
             _processor = ChineseCLIPProcessor.from_pretrained(
                 model_name,
-                local_files_only=cfg.local_files_only,
+                cache_dir=cache_dir,
+                local_files_only=True,
             )
             _model.eval()
             _model.to(target_device)
@@ -84,6 +90,7 @@ def _load_internal(device: str = "auto") -> tuple[ChineseCLIPModel, ChineseCLIPP
                     event="ok",
                     model=model_name,
                     device=str(target_device),
+                    cache_dir=cache_dir or "default",
                     duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                 ),
             )

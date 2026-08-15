@@ -17,6 +17,7 @@ import threading
 import time
 
 from config.config import get_settings
+from utils.model_cache import apply_hf_env, ensure_hf_model, resolve_hf_cache_root
 from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
@@ -27,15 +28,11 @@ _model_loaded = False
 
 
 def _apply_endpoint_env(cfg) -> None:
-    """把配置中的 HF 镜像写到进程环境变量，覆盖 huggingface_hub 的默认 endpoint。
+    """把配置中的 HF 镜像 / 超时 / 缓存根写到进程环境变量。
 
     必须在第一次触发 HF 请求之前调用，否则对应 httpx 客户端已经用旧 endpoint 起好。
     """
-    if cfg.endpoint:
-        # 只有当用户没显式设置过 HF_ENDPOINT 时才覆盖，方便在 shell 里手动改
-        os.environ.setdefault("HF_ENDPOINT", cfg.endpoint)
-    if cfg.download_timeout:
-        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(cfg.download_timeout))
+    apply_hf_env(endpoint=cfg.endpoint, download_timeout=cfg.download_timeout)
 
 
 def _fallback_embed(texts: list[str], dim: int) -> list[list[float]]:
@@ -92,6 +89,10 @@ def _load_model():
         try:
             from sentence_transformers import SentenceTransformer
 
+            # 缓存未命中且允许下载时先拉取到指定缓存目录；命中则直接本地加载。
+            if not cfg.local_files_only:
+                ensure_hf_model(cfg.model, endpoint=cfg.endpoint, download_timeout=cfg.download_timeout)
+            cache_folder = resolve_hf_cache_root()
             logger.info(
                 "loading BGE-M3",
                 extra=merge_extra(
@@ -100,14 +101,16 @@ def _load_model():
                     model=cfg.model,
                     device=resolved,
                     endpoint=cfg.endpoint or os.environ.get("HF_ENDPOINT"),
-                    local_files_only=cfg.local_files_only,
+                    cache_dir=cache_folder or "default",
+                    local_files_only=True,
                 ),
             )
+            # ensure_hf_model 已保证快照存在，这里 local_files_only=True 全程离线加载。
             _model = SentenceTransformer(
                 cfg.model,
                 device=resolved,
-                cache_folder=None,
-                local_files_only=cfg.local_files_only,
+                cache_folder=cache_folder,
+                local_files_only=True,
             )
             logger.info(
                 "BGE-M3 model loaded",
@@ -116,6 +119,7 @@ def _load_model():
                     event="ok",
                     model=cfg.model,
                     device=resolved,
+                    cache_dir=cache_folder or "default",
                     duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                 ),
             )

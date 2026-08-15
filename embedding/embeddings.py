@@ -82,8 +82,13 @@ class ChineseCLIPEmbeddings(Embeddings):
         else:
             try:
                 from sentence_transformers import SentenceTransformer
+                from utils.model_cache import resolve_hf_cache_root
 
-                self._st = SentenceTransformer(self.model_name or "sentence-transformers/all-MiniLM-L6-v2", device=self.device)
+                self._st = SentenceTransformer(
+                    self.model_name or "sentence-transformers/all-MiniLM-L6-v2",
+                    device=self.device,
+                    cache_folder=resolve_hf_cache_root(),
+                )
                 self._embed_fn = lambda texts: [list(map(float, v)) for v in self._st.encode(list(texts))]
             except Exception as e:
                 log_silent_failure(

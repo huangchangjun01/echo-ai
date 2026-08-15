@@ -21,8 +21,10 @@ import shutil
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 from config.config import get_settings
+from utils.model_cache import ModelNotCachedError, apply_hf_env, resolve_whisper_root
 from utils.request_context import log_exception, log_silent_failure, merge_extra
 
 logger = logging.getLogger(__name__)
@@ -32,12 +34,9 @@ _WHISPER_SAMPLE_RATE = 16000
 
 
 def _apply_endpoint_env() -> None:
-    """参见 embedding.bge_m3._apply_endpoint_env。"""
+    """固化 HF 镜像 / 超时 / 缓存根环境变量；必须在首次 HF 请求前调用。"""
     cfg = get_settings().embedding
-    if cfg.endpoint:
-        os.environ.setdefault("HF_ENDPOINT", cfg.endpoint)
-    if cfg.download_timeout:
-        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(cfg.download_timeout))
+    apply_hf_env(endpoint=cfg.endpoint, download_timeout=cfg.download_timeout)
 
 
 def _resolve_ffmpeg() -> str | None:
@@ -176,14 +175,27 @@ def _reset_model_cache() -> None:
 
 
 def _get_model(name: str):
-    """加载并缓存指定档位的 whisper 模型。"""
+    """加载并缓存指定档位的 whisper 模型。
+
+    权重优先从指定缓存目录（MODEL_CACHE_DIR/whisper）获取；未命中且允许下载时，
+    交由 whisper 内部按 download_root 下载。禁止下载（MODEL_AUTO_DOWNLOAD=false）
+    且本地缺失时抛 ModelNotCachedError，由上层走空转录兜底。
+    """
     cached = _MODELS.get(name)
     if cached is not None:
         return cached
     import whisper  # type: ignore
 
+    download_root = resolve_whisper_root()
+    if not get_settings().model.auto_download and download_root:
+        pt = Path(download_root) / f"{name}.pt"
+        if not pt.exists():
+            raise ModelNotCachedError(
+                f"whisper model {name!r} not in cache dir and auto_download disabled "
+                f"(cache_dir={download_root})"
+            )
     t0 = time.perf_counter()
-    model = whisper.load_model(name)
+    model = whisper.load_model(name, download_root=download_root)
     _MODELS[name] = model
     logger.info(
         "whisper model loaded",
@@ -191,6 +203,7 @@ def _get_model(name: str):
             stage="whisper_transcribe",
             event="model_loaded",
             model=name,
+            download_root=download_root or "default",
             duration_ms=round((time.perf_counter() - t0) * 1000, 2),
         ),
     )

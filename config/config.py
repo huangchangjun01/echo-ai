@@ -227,6 +227,24 @@ class IngestSettings(BaseSettings):
     cache_maxsize: int = 1024
 
 
+class ModelCacheSettings(BaseSettings):
+    """本地模型缓存目录配置（MODEL_ 前缀）。
+
+    统一管理语音 / 视频 / 文本 / 图片等本地模型：
+    - 每次启动 / 使用优先从指定缓存目录获取，取不到时才下载。
+    - 结构：<cache_dir>/huggingface/hub（HF 模型）、<cache_dir>/whisper（Whisper）。
+    - 留空时回退到各库默认缓存位置（HF: ~/.cache/huggingface，whisper: ~/.cache/whisper），
+      保证已缓存模型无需重复下载。
+    """
+
+    model_config = SettingsConfigDict(env_prefix="MODEL_", **_BASE_CONFIG)
+
+    # 指定模型缓存根目录；空 = 使用各库默认位置。
+    cache_dir: str | None = None
+    # 缓存未命中时是否允许联网下载。false = 仅用缓存（离线部署）。
+    auto_download: bool = True
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APP_", **_BASE_CONFIG)
 
@@ -250,6 +268,7 @@ class Settings(BaseSettings):
     memory: MemorySettings = Field(default_factory=MemorySettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
     app: AppSettings = Field(default_factory=AppSettings)
+    model: ModelCacheSettings = Field(default_factory=ModelCacheSettings)
 
     vector_similarity_threshold: float = Field(0.7, ge=-1.0, le=1.0)
     # 兼容旧字段：doc 端阈值
