@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm.cascade import _strip_think
+from llm.think import _strip_think
 
 # Re-implement the same regex shape used in extractor for the test.
 _RE_LIST = re.compile(r"\[[\s\S]*?\]")

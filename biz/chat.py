@@ -13,9 +13,9 @@ from typing import Any
 
 from config.config import get_settings
 from config.prompts import build_system_prompt
-from llm.cascade import _strip_think, cascade_chat
 from llm.client import get_llm_client, parse_tool_call
 from llm.intent import Intent, classify_intent
+from llm.think import _has_open_think, _strip_think
 from memory import build_chat_context, extract_and_archive_async
 from memory.retriever import causal_chain, load_persona
 from tools import adispatch as dispatch_tool
@@ -67,6 +67,22 @@ _INTENT_TOOL_HINT: dict[Intent, str] = {
         "如无强需求，直接自然语言回复即可，不必调用工具。"
     ),
 }
+
+
+# ---------- 装饰性即时回应（presence，方案A） ----------
+# 小模型直流正文前先下发一句"心跳"回应：确定性、毫秒级、**不进 final_text**，
+# 由前端作为"正在回应"的提示展示，第一个 delta 到达后即消失。
+_PRESENCE_BY_INTENT: dict[Intent, str] = {
+    Intent.CHAT: "嗯，我在听~",
+    Intent.RECALL: "让我想想之前聊过什么……",
+    Intent.TEXT_SEARCH: "我帮你找找看~",
+    Intent.DOC_SEARCH: "我翻一下资料~",
+    Intent.IMAGE_SEARCH: "我看一下这张图~",
+}
+
+
+def _presence_for_intent(intent: Intent) -> str:
+    return _PRESENCE_BY_INTENT.get(intent, "嗯嗯~")
 
 
 # ---------- 资源提取：把命中里的可下载 URL 抽成前端可渲染的 resource 事件 ----------
@@ -335,7 +351,7 @@ async def _resolve_tools(
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """ReAct 工具解析：逐轮让 LLM 决定是否调用工具并执行，直到 LLM 不再要求工具或迭代耗尽。
 
-    **不生成最终自然语言回复**——最终回复由 chat_stream 通过 cascade 流式产出。
+    **不生成最终自然语言回复**——最终回复由 chat_stream 通过小模型直接流式产出。
 
     返回 (tool_log, tool_turns)。tool_turns 是可追加进「最终生成上下文」的对话轮次
     （形如 assistant「[calling tool: x]」+ user「工具结果」），让最终生成看到工具产出。
@@ -360,7 +376,9 @@ async def _resolve_tools(
         t0 = time.perf_counter()
         raw_text = ""
         try:
-            resp = await client.chat(decision_messages, max_tokens=400, temperature=0.3)
+            # max_tokens 给足：DeepSeek 推理思考会计入 max_tokens 总预算，
+            # 400 可能被思考吃光导致工具调用 JSON 落不下来；1024 留足空间。
+            resp = await client.small_chat(decision_messages, max_tokens=1024, temperature=0.3)
             raw_text = resp.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
             # 剥离思考块，避免影响 tool_call 解析
             text = _strip_think(raw_text)
@@ -394,7 +412,7 @@ async def _resolve_tools(
         call = parse_tool_call(text)
         if not call:
             logger.info(
-                "react no tool call (hand off to cascade)",
+                "react no tool call (hand off to reply generation)",
                 extra=merge_extra(stage="react_loop", event="no_tool", iter=i, out_len=len(text)),
             )
             break
@@ -517,6 +535,11 @@ async def chat_stream(
         ),
     )
 
+    # 方案A：先 yield 装饰性即时回应（presence，不进 final_text）。
+    # 情感陪伴：让"我在呢~"这类心跳占住首屏，前端作为"正在回应"的提示展示，
+    # 首个 delta 到达后即消失；正文由小模型直接流式生成。
+    yield {"type": "presence", "text": _presence_for_intent(intent)}
+
     # 1) 预注入上下文（仅 image_search 触发 multimodal_search，其余走轻量路径）
     t_ctx = time.perf_counter()
     with log_stage(logger, "context_build", start_msg="building chat context") as ctx_meta:
@@ -595,7 +618,7 @@ async def chat_stream(
 
     # 回忆记忆注入：在「ReAct 工具决策 + 最终回复」之前先做一次 EchoRecall 检索。
     # 这样 LLM 在工具决策阶段就能拿到 memoryId，**才会**主动调 read_memory_full 拿完整 .md；
-    # 同样的摘要会再注入到 final_messages 给 cascade 用。
+    # 同样的摘要会再注入到 final_messages 给最终回复生成用。
     # 注意：与现有 L0/L1 对话记忆**完全隔离**；回忆记忆永不遗忘，本处只读不写。
     recall_hits: list[dict[str, Any]] = []
     try:
@@ -677,7 +700,7 @@ async def chat_stream(
             yield res
 
     # 「最终回复生成」上下文：干净的对话（不带工具偏好/JSON 框架），含工具结果 + 收尾指令。
-    # 交由 cascade 做「小模型前缀 + 大模型实时续写」的流式生成。
+    # 交由小模型直接流式生成对话回复（方案A）。
     final_messages: list[dict[str, str]] = [
         {"role": "system", "content": system_prompt},
     ]
@@ -686,7 +709,7 @@ async def chat_stream(
             {"role": "system", "content": f"【L1 检索预注入】\n{l1_hint or '（无）'}"}
         )
 
-    # 把"含 memoryId 的摘要"也注入到 cascade 的 final_messages，与 ReAct 决策阶段一致。
+    # 把"含 memoryId 的摘要"也注入到最终回复生成的 final_messages，与 ReAct 决策阶段一致。
     # 这样最终生成时也能看到 memoryId，并在 tool_turns 里"已经看到 read_memory_full 全文"时引用。
     if recall_hits:
         # 复用上面的 bullets 重新拼一份（结构与上面 recall_seed 保持一致，便于 LLM 串联两个阶段的理解）
@@ -751,18 +774,51 @@ async def chat_stream(
             }
         )
 
-    # 流式级联：小模型前缀（首屏）+ 大模型逐 chunk 实时续写。
+    # 方案A：单一小模型直接流式生成对话回复（首字延迟敏感）。
+    # presence 已在入口 yield；这里逐 chunk 流式产出正文，增量剥离 <think> 推理块。
+    # DeepSeek 风格模型的推理过程在独立的 reasoning_content 字段 → 下发为 thinking 事件，
+    # 让前端"模型思考"面板展示（stage=model_reasoning）；正文下发为 delta。
     # LLM 常在裸 URL 前自作主张加 https://，逐段清掉 scheme 前缀后再下发。
-    async for ev in cascade_chat(
-        final_messages, prefix_tokens=settings.cascade_prefix_tokens
+    llm_cfg = get_settings().llm
+    reply_client = get_llm_client()
+    raw = ""
+    emitted = 0
+    t_gen = time.perf_counter()
+    async for content, reasoning in reply_client.small_stream(
+        final_messages,
+        max_tokens=llm_cfg.small_max_tokens,
     ):
-        et = ev.get("type")
-        if et == "prefix":
-            yield {"type": "prefix", "text": _strip_url_schemes(ev.get("text") or "")}
-        elif et == "delta":
-            yield {"type": "delta", "text": _strip_url_schemes(ev.get("text") or "")}
-        elif et == "done":
-            final_text = _strip_url_schemes(ev.get("full") or "")
+        if reasoning:
+            yield {"type": "thinking", "stage": "model_reasoning", "text": reasoning}
+        if not content:
+            continue
+        raw += content
+        if _has_open_think(raw):
+            continue
+        cleaned = _strip_think(raw)
+        if len(cleaned) <= emitted:
+            continue
+        piece = cleaned[emitted:]
+        emitted = len(cleaned)
+        final_text += piece
+        yield {"type": "delta", "text": _strip_url_schemes(piece)}
+    # 流结束时清理尚未闭合的 <think> 残余
+    cleaned = _strip_think(raw)
+    if len(cleaned) > emitted:
+        piece = cleaned[emitted:]
+        final_text += piece
+        yield {"type": "delta", "text": _strip_url_schemes(piece)}
+    logger.info(
+        "chat reply streamed",
+        extra=merge_extra(
+            stage="chat_stream",
+            event="reply_streamed",
+            model=llm_cfg.small_model,
+            raw_len=len(raw),
+            reply_len=len(final_text),
+            duration_ms=round((time.perf_counter() - t_gen) * 1000, 2),
+        ),
+    )
 
     # 把可下载资源以 markdown 形式追加到 final_text 末尾，
     # 让只读 full 文本的前端也能拿到 URL（同时跳过 LLM 已经写过的）。

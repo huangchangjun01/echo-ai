@@ -105,7 +105,11 @@ class DBSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    """OpenAI 兼容 LLM 配置：大模型主用 + 情感微模型（小模型）前缀。"""
+    """OpenAI 兼容 LLM 配置：大小模型分工。
+
+    小模型负责「日常对话」（单一小模型直接流式生成回复，首字延迟敏感）；
+    大模型负责「记忆抽取 / 摘要生成 / 图文音视频内容描述」等后台生成任务。
+    """
 
     model_config = SettingsConfigDict(env_prefix="LLM_", **_BASE_CONFIG)
 
@@ -113,14 +117,14 @@ class LLMSettings(BaseSettings):
     base_url: str = "https://api.openai.com/v1"
     api_key: str = ""
 
-    # 大模型
+    # 大模型：记忆 / 摘要 / 内容描述
     model: str = "gpt-4o-mini"
     max_tokens: int = 2048
     temperature: float = 0.7
 
-    # 小模型（情感微模型 / 快速前缀）
+    # 小模型：日常对话（回复 token 上限）
     small_model: str = "gpt-4o-mini"
-    small_max_tokens: int = 64
+    small_max_tokens: int = 1024
     small_temperature: float = 0.5
     small_base_url: str = ""
     small_api_key: str = ""
@@ -202,8 +206,6 @@ class MemorySettings(BaseSettings):
     dedup_threshold: float = 0.92
     react_max_iter: int = 3
     enable_async_extract: bool = True
-    # 级联前缀：小模型先吐的 token 数（首字延迟敏感）。太小看不到预览，太大拖慢首屏。
-    cascade_prefix_tokens: int = 64
     # 单次搜索最多返回的命中数；默认 1，UI 只展示最相关的一条。
     search_max_hits: int = 1
 

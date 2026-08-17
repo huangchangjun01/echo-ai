@@ -122,12 +122,47 @@ def apply_hf_env(endpoint: str | None = None, download_timeout: int | None = Non
         os.environ.setdefault("HF_HUB_CACHE", str(base / "huggingface" / "hub"))
 
 
-def _locate_cached_snapshot(model_id: str, cache_root: str | None) -> Path | None:
-    """在 HF 缓存根中定位指定模型已缓存的快照；纯本地扫描，不触发网络请求。
+def _snapshot_is_complete(snap: Path) -> bool:
+    """快照完整性启发：模型必须至少包含 ``config.json``（transformers 通用必需文件）。
 
-    优先用 huggingface_hub.scan_cache_dir 的官方解析；异常时按经典磁盘布局兜底
-    （refs/main → snapshots/<sha>，再退回最近的非空快照目录）。
+    避免选中只有部分权重的**不完整快照**（如中断下载残留的 model.safetensors），
+    否则加载时会被迫联网补文件，破坏"缓存优先、全程离线"的语义。
     """
+    if not snap.is_dir() or not any(snap.iterdir()):
+        return False
+    return (snap / "config.json").is_file()
+
+
+def _repo_dir(model_id: str, cache_root: str | None) -> Path:
+    if cache_root:
+        return Path(cache_root) / f"models--{model_id.replace('/', '--')}"
+    return Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_id.replace('/', '--')}"
+
+
+def _locate_cached_snapshot(model_id: str, cache_root: str | None) -> Path | None:
+    """在 HF 缓存根中定位指定模型已缓存的**完整**快照；纯本地扫描，不触发网络请求。
+
+    优先级：
+    1. ``refs/main``（HF 权威修订）解析出的快照，且必须完整；
+    2. ``scan_cache_dir`` 中最新的完整快照；
+    3. 手动按快照目录 mtime 取最新完整快照。
+    """
+    repo_dir = _repo_dir(model_id, cache_root)
+    snapshots_dir = repo_dir / "snapshots" if repo_dir.is_dir() else None
+
+    # 1) refs/main 权威修订
+    if snapshots_dir is not None and snapshots_dir.is_dir():
+        for ref_file in (repo_dir / "refs" / "main", repo_dir / ".refs" / "main"):
+            try:
+                sha = ref_file.read_text(encoding="utf-8").strip()
+                if sha:
+                    snap = snapshots_dir / sha
+                    if _snapshot_is_complete(snap):
+                        return snap
+            except OSError:
+                continue
+
+    # 2) scan_cache_dir（官方解析，按 last_modified 从新到旧）
     try:
         from huggingface_hub import scan_cache_dir
 
@@ -142,7 +177,7 @@ def _locate_cached_snapshot(model_id: str, cache_root: str | None) -> Path | Non
             )
             for rev in revisions:
                 snap = getattr(rev, "snapshot_path", None)
-                if snap and Path(snap).is_dir() and any(Path(snap).iterdir()):
+                if snap and _snapshot_is_complete(Path(snap)):
                     return Path(snap)
     except Exception as e:
         log_silent_failure(
@@ -154,29 +189,12 @@ def _locate_cached_snapshot(model_id: str, cache_root: str | None) -> Path | Non
             model=model_id,
         )
 
-    # ---- 手动兜底：经典 HF 缓存布局 ----
-    if cache_root:
-        repo_dir = Path(cache_root) / f"models--{model_id.replace('/', '--')}"
-    else:
-        repo_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_id.replace('/', '--')}"
-    if not repo_dir.is_dir():
-        return None
-    snapshots_dir = repo_dir / "snapshots"
-    if not snapshots_dir.is_dir():
-        return None
-    for ref_file in (repo_dir / "refs" / "main", repo_dir / ".refs" / "main"):
-        try:
-            sha = ref_file.read_text(encoding="utf-8").strip()
-            if sha:
-                snap = snapshots_dir / sha
-                if snap.is_dir() and any(snap.iterdir()):
-                    return snap
-        except OSError:
-            continue
-    candidates = [d for d in snapshots_dir.iterdir() if d.is_dir() and any(d.iterdir())]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.stat().st_mtime)
+    # 3) 手动兜底：完整快照按 mtime 取最新
+    if snapshots_dir is not None and snapshots_dir.is_dir():
+        candidates = [d for d in snapshots_dir.iterdir() if _snapshot_is_complete(d)]
+        if candidates:
+            return max(candidates, key=lambda p: p.stat().st_mtime)
+    return None
 
 
 def ensure_hf_model(

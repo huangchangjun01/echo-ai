@@ -22,7 +22,7 @@ import uuid
 from typing import Any
 
 from config.config import get_settings
-from llm.cascade import _strip_think
+from llm.think import _strip_think
 from utils.request_context import log_exception, log_silent_failure, log_stage, merge_extra
 
 logger = logging.getLogger(__name__)
@@ -477,7 +477,7 @@ async def _summarize(user_id: str, contents: list[str]) -> str:
     t0 = time.perf_counter()
     try:
         from llm.client import get_llm_client
-        from llm.cascade import _strip_think
+        from llm.think import _strip_think
 
         client = get_llm_client()
         prompt = (

@@ -125,7 +125,7 @@ async def load_l1_summaries(user_id: str, limit: int | None = None, role_id: str
     t0 = time.perf_counter()
     try:
         from database import fetch_all
-        from llm.cascade import _strip_think
+        from llm.think import _strip_think
 
         rows = await fetch_all(
             """
