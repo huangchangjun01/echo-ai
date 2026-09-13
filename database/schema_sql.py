@@ -123,6 +123,141 @@ DDL_STATEMENTS: tuple[str, ...] = (
         INDEX idx_chmsg_user_role (user_id, role_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
+    # ====== Role Core 8 张新表(PRD 02_PRD_data_model.md, M0 引入)======
+    # ---------- 1. 结构化人格(role_persona) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_persona (
+        user_id          BIGINT NOT NULL,
+        role_id          BIGINT NOT NULL,
+        identity         TEXT NULL,
+        background       TEXT NULL,
+        traits_tags      VARCHAR(2048) NULL,
+        `values`         TEXT NULL,
+        speaking_style   TEXT NULL,
+        taboos           TEXT NULL,
+        example_dialogs  TEXT NULL,
+        version          INT NOT NULL DEFAULT 1,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, role_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 2. OCEAN 五维(role_traits) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_traits (
+        user_id            BIGINT NOT NULL,
+        role_id            BIGINT NOT NULL,
+        openness           DECIMAL(5,3) NOT NULL DEFAULT 0,
+        conscientiousness  DECIMAL(5,3) NOT NULL DEFAULT 0,
+        extraversion       DECIMAL(5,3) NOT NULL DEFAULT 0,
+        agreeableness      DECIMAL(5,3) NOT NULL DEFAULT 0,
+        neuroticism        DECIMAL(5,3) NOT NULL DEFAULT 0,
+        preset_type        VARCHAR(32) NOT NULL DEFAULT 'companion_default',
+        created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, role_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 3. 三桶心情(role_mood) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_mood (
+        user_id            BIGINT NOT NULL,
+        role_id            BIGINT NOT NULL,
+        instant_val        DECIMAL(5,3) NOT NULL DEFAULT 0,
+        instant_intensity  DECIMAL(5,3) NOT NULL DEFAULT 0,
+        instant_emotion    VARCHAR(32) NOT NULL DEFAULT 'neutral',
+        short_val          DECIMAL(5,3) NOT NULL DEFAULT 0,
+        short_intensity    DECIMAL(5,3) NOT NULL DEFAULT 0,
+        short_emotion      VARCHAR(32) NOT NULL DEFAULT 'neutral',
+        baseline_val       DECIMAL(5,3) NOT NULL DEFAULT 0,
+        baseline_intensity DECIMAL(5,3) NOT NULL DEFAULT 0,
+        baseline_emotion   VARCHAR(32) NOT NULL DEFAULT 'neutral',
+        last_event_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, role_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 4. 信念清单(role_belief) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_belief (
+        id              BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id         BIGINT NOT NULL,
+        role_id         BIGINT NOT NULL,
+        topic           VARCHAR(128) NOT NULL,
+        stance          TEXT NOT NULL,
+        confidence      DECIMAL(4,3) NOT NULL DEFAULT 0,
+        evidence_count  INT NOT NULL DEFAULT 0,
+        source          VARCHAR(32) NOT NULL DEFAULT 'user_edit',
+        user_confirmed  TINYINT(1) NOT NULL DEFAULT 0,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_belief_user_role (user_id, role_id),
+        INDEX idx_belief_confirmed (user_confirmed)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 5. 三维关系值(role_relationship) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_relationship (
+        user_id       BIGINT NOT NULL,
+        role_id       BIGINT NOT NULL,
+        intimacy      DECIMAL(4,3) NOT NULL DEFAULT 0,
+        trust         DECIMAL(4,3) NOT NULL DEFAULT 0,
+        satisfaction  DECIMAL(4,3) NOT NULL DEFAULT 0,
+        co_days       INT NOT NULL DEFAULT 0,
+        updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, role_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 6. 审计日志(role_core_audit_log) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_core_audit_log (
+        id            BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id       BIGINT NOT NULL,
+        role_id       BIGINT NOT NULL,
+        action        VARCHAR(32) NOT NULL,
+        target_type   VARCHAR(32) NOT NULL,
+        before_json   TEXT NULL,
+        after_json    TEXT NULL,
+        delta_summary TEXT NULL,
+        trigger_event VARCHAR(64) NULL,
+        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_audit_user_role_time (user_id, role_id, created_at),
+        INDEX idx_audit_action (action),
+        INDEX idx_audit_target (target_type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 7. 用户反馈(role_feedback) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_feedback (
+        id         BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id    BIGINT NOT NULL,
+        role_id    BIGINT NOT NULL,
+        message_id VARCHAR(64) NOT NULL,
+        rating     INT NOT NULL,
+        comment    TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_feedback_user_role_time (user_id, role_id, created_at),
+        INDEX idx_feedback_message (message_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    # ---------- 8. 演化建议(role_evolution_suggestion) ----------
+    """
+    CREATE TABLE IF NOT EXISTS role_evolution_suggestion (
+        id              BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id         BIGINT NOT NULL,
+        role_id         BIGINT NOT NULL,
+        target_type     VARCHAR(32) NOT NULL,
+        suggestion_json TEXT NOT NULL,
+        status          VARCHAR(16) NOT NULL DEFAULT 'pending',
+        source          VARCHAR(32) NOT NULL DEFAULT 'memory_extract',
+        confidence      DECIMAL(4,3) NOT NULL DEFAULT 0,
+        reason          TEXT NULL,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        resolved_at     DATETIME NULL,
+        INDEX idx_sug_user_role_status_time (user_id, role_id, status, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
 )
 
 

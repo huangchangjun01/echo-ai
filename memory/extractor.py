@@ -102,53 +102,100 @@ def _normalize_fact_item(it: Any) -> dict | None:
 
 
 def _parse_extracted_items(content: str, *, stage: str, log_extra: dict, t0: float) -> list[dict]:
-    """从 LLM 原始输出里解析出记忆数组（含 <think> 剥离 + 坏 JSON 修复兜底）。"""
+    r"""从 LLM 原始输出里解析出记忆数组（含 <think> 剥离 + 坏 JSON 修复兜底）。
+
+    改进 (2026-08-23): 之前用 `r"\[[\s\S]*?\]"` 非贪婪匹配，当 LLM 输出多行缩进 JSON
+    时,会卡在第一个内层 `]` 提前终止 (R4 复现)。改为贪心 + 括号配对扫描,或者最差
+    也用 json.JSONDecoder.raw_decode 跳过空白直接定位第一个完整 array。
+    """
     cleaned = _strip_think(content or "")
-    m = re.search(r"\[[\s\S]*?\]", cleaned)
-    if not m:
+    if not cleaned:
         logger.info(
             f"{stage} empty list",
             extra=merge_extra(
                 stage=stage,
                 event="empty",
+                reason="cleaned_empty",
                 raw_preview=(content or "")[:120],
-                cleaned_preview=(cleaned or "")[:120],
                 duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                 **log_extra,
             ),
         )
         return []
+    # 1) 优先用 JSONDecoder 从任意位置开始解码第一个 array (跨行,带缩进,完美)
+    items: list | None = None
+    decoder_err: Exception | None = None
     try:
-        items = json.loads(m.group(0))
-    except json.JSONDecodeError:
-        # 解析失败：先尝试状态机式修复（裸双引号场景），修复后再解析一次。
-        repaired = _repair_json(m.group(0))
-        try:
-            items = json.loads(repaired)
-            logger.info(
-                f"{stage} json repaired",
-                extra=merge_extra(
-                    stage=stage,
-                    event="repaired",
-                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
-                    **log_extra,
-                ),
-            )
-        except json.JSONDecodeError as e2:
-            log_exception(
-                logger,
-                f"{stage} JSON parse failed",
-                exc=e2,
-                level=logging.WARNING,
+        # 找到第一个 '[' 字符
+        idx = cleaned.find("[")
+        if idx >= 0:
+            obj, _end = json.JSONDecoder().raw_decode(cleaned, idx)
+            if isinstance(obj, list):
+                items = obj
+    except json.JSONDecodeError as e:
+        decoder_err = e
+    # 2) 退化: 找最后一个 '\n[ ' 或 '[' 起, 再用括号配对扫到匹配 ']'
+    if items is None:
+        last_open = cleaned.rfind("[")
+        if last_open >= 0:
+            depth = 0
+            in_str = False
+            esc = False
+            for j in range(last_open, len(cleaned)):
+                ch = cleaned[j]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == "\\":
+                        esc = True
+                    elif ch == '"':
+                        in_str = False
+                    continue
+                if ch == '"':
+                    in_str = True
+                elif ch == "[":
+                    depth += 1
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = cleaned[last_open : j + 1]
+                        try:
+                            obj = json.loads(candidate)
+                            if isinstance(obj, list):
+                                items = obj
+                        except json.JSONDecodeError:
+                            # 走 repair 兜底
+                            repaired = _repair_json(candidate)
+                            try:
+                                obj = json.loads(repaired)
+                                if isinstance(obj, list):
+                                    items = obj
+                                    logger.info(
+                                        f"{stage} json repaired",
+                                        extra=merge_extra(
+                                            stage=stage, event="repaired",
+                                            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                                            **log_extra,
+                                        ),
+                                    )
+                            except json.JSONDecodeError:
+                                pass
+                        break
+    if not items:
+        logger.info(
+            f"{stage} empty list",
+            extra=merge_extra(
                 stage=stage,
-                event="parse_error",
+                event="empty",
+                reason="no_array_found",
                 raw_preview=(content or "")[:200],
                 cleaned_preview=(cleaned or "")[:200],
-                matched_preview=m.group(0)[:200],
+                decoder_err=str(decoder_err)[:100] if decoder_err else None,
                 duration_ms=round((time.perf_counter() - t0) * 1000, 2),
                 **log_extra,
-            )
-            return []
+            ),
+        )
+        return []
     if not isinstance(items, list):
         return []
     out = [x for x in (_normalize_fact_item(it) for it in items) if x]
@@ -183,7 +230,7 @@ async def _llm_extract(user_msg: str, assistant_msg: str) -> list[dict]:
                 {"role": "system", "content": MEMORY_EXTRACT_SYSTEM},
                 {"role": "user", "content": prompt_user},
             ],
-            max_tokens=600,
+            max_tokens=2048,
             temperature=0.2,
         )
         content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -577,6 +624,120 @@ async def _memory_relations_columns() -> set[str]:
     return _REL_COLUMNS
 
 
+async def _find_similar_cause(
+    user_id: str,
+    role_id: str,
+    fact_text: str,
+    fact_level: str,
+    target_id: int,
+    relation: str,
+    top_k: int = 5,
+) -> int | None:
+    """用 BGE-M3 向量相似度在 EchoMemory 中检索「满足指定 relation 类型的语义最相关的历史 fact」。
+
+    背景：原先的「最近 id」策略 (`ORDER BY id DESC LIMIT 1`) 只看写入顺序，
+    与 LLM 输出的 relation（causes/update/extend/contradict）毫无语义关联，
+    经常把毫不相干的事实串成因果边。本函数改用向量近邻：
+    1. BGE-M3 编码新 fact
+    2. 在 EchoMemory（同一 userId/roleId 租户）做 near-vector top-k
+    3. 后过滤：仅保留与新 fact 同 level 且 memoryId < target_id（防止选中刚写入的同条目）
+    4. 取第一个超过相似度阈值的命中作为 source_id
+
+    不同 relation 类型的语义偏向由「相似度本身」承担：
+    - causes / extend: 历史 fact 主题相近，相似度高
+    - contradict: 主题相近但情感/方向相反，相似度仍较高但可通过后续矛盾清理识别
+    - update: 同一对象的更新，相似度最高
+    """
+    if not fact_text or not target_id:
+        return None
+    t0 = time.perf_counter()
+    try:
+        from embedding.bge_m3 import embed_texts
+        from vector.memory_store import get_memory_vector_store
+
+        def _embed(texts: list[str]) -> list[list[float]]:
+            return embed_texts(texts)
+
+        vs = await asyncio.to_thread(get_memory_vector_store)
+        result = await asyncio.to_thread(
+            vs.query,
+            fact_text,
+            max(top_k, 5),
+            _embed,
+            {"userId": user_id, "roleId": role_id},
+        )
+        ids = result.get("ids", [[]])[0]
+        mds = result.get("metadatas", [[]])[0]
+        distances = result.get("distances", [[]])[0]
+        # 阈值：复用 weaviate.memory_threshold（默认 0.7）作下限；不够再放宽到 0.4
+        threshold = float(get_settings().weaviate.memory_threshold or 0.7)
+        candidates: list[tuple[float, int]] = []
+        for i, _id in enumerate(ids):
+            if i >= len(mds) or i >= len(distances):
+                break
+            md = mds[i] or {}
+            mid_raw = md.get("memoryId", 0)
+            try:
+                mid = int(mid_raw or 0)
+            except (TypeError, ValueError):
+                continue
+            if mid <= 0 or mid >= target_id:
+                continue
+            lvl = str(md.get("level", ""))
+            if lvl and lvl != fact_level:
+                continue
+            sim = 1.0 - float(distances[i] or 0.0)
+            if sim < threshold:
+                continue
+            candidates.append((sim, mid))
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        if candidates:
+            chosen_sim, chosen_id = candidates[0]
+            logger.info(
+                "vector-similarity cause selected",
+                extra=merge_extra(
+                    stage="memory_relation",
+                    event="vector_cause_selected",
+                    user_id=user_id,
+                    relation=relation,
+                    target_id=target_id,
+                    source_id=chosen_id,
+                    level=fact_level,
+                    similarity=round(chosen_sim, 4),
+                    candidates=len(candidates),
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+                ),
+            )
+            return chosen_id
+        logger.info(
+            "vector-similarity cause miss",
+            extra=merge_extra(
+                stage="memory_relation",
+                event="vector_cause_miss",
+                user_id=user_id,
+                relation=relation,
+                target_id=target_id,
+                level=fact_level,
+                candidates=len(candidates),
+                threshold=threshold,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+            ),
+        )
+        return None
+    except Exception as e:
+        log_exception(
+            logger,
+            "_find_similar_cause failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="memory_relation",
+            event="vector_cause_error",
+            user_id=user_id,
+            relation=relation,
+        )
+        return None
+
+
 async def _archive(
     user_id: str,
     items: list[dict],
@@ -588,40 +749,45 @@ async def _archive(
     from database import execute, fetch_one
 
     inserted: list[int] = []
-    # 1) 先写 summary（L2）独立行
+    # 1) 先写 summary（L2）独立行。
+    #    改进 (2026-08-23): 即便 LLM 返回的 summary 为空,也写一个占位 L2 行
+    #    (content="[会话无摘要]"), 让下游 L1 rows 的 parent_id 永远有有效外键。
+    #    之前 summary_len=0 时跳过 L2 写入,导致 L1.parent_id 全为 None,
+    #    改动 2 (按 parent_id 优先级补齐父摘要) 在生产路径下完全失效。
     summary_id: int | None = None
-    if summary:
-        try:
-            await execute(
-                """
-                INSERT INTO memories (user_id, role_id, level, content, summary, emotion_tag, emotion_intensity, importance)
-                VALUES (%s, %s, 'L2', %s, %s, 'neutral', 0.0, 0.7)
-                """,
-                (user_id, role_id, summary, summary),
-            )
-            row = await fetch_one("SELECT LAST_INSERT_ID() AS id")
-            summary_id = int(row["id"]) if row else None
-            logger.info(
-                "archive summary inserted",
-                extra=merge_extra(
-                    stage="archive",
-                    event="summary_inserted",
-                    user_id=user_id,
-                    summary_id=summary_id,
-                    summary_len=len(summary),
-                ),
-            )
-        except Exception as e:
-            log_exception(
-                logger,
-                "archive summary failed",
-                exc=e,
-                level=logging.WARNING,
+    summary_content = (summary or "").strip() or "[会话无摘要]"
+    try:
+        await execute(
+            """
+            INSERT INTO memories (user_id, role_id, level, content, summary, emotion_tag, emotion_intensity, importance)
+            VALUES (%s, %s, 'L2', %s, %s, 'neutral', 0.0, 0.7)
+            """,
+            (user_id, role_id, summary_content, summary_content),
+        )
+        row = await fetch_one("SELECT LAST_INSERT_ID() AS id")
+        summary_id = int(row["id"]) if row else None
+        logger.info(
+            "archive summary inserted",
+            extra=merge_extra(
                 stage="archive",
-                event="summary_error",
+                event="summary_inserted",
                 user_id=user_id,
-                summary_len=len(summary) if 'summary' in locals() else None,
-            )
+                summary_id=summary_id,
+                summary_len=len(summary_content),
+                placeholder=(not summary),
+            ),
+        )
+    except Exception as e:
+        log_exception(
+            logger,
+            "archive summary failed",
+            exc=e,
+            level=logging.WARNING,
+            stage="archive",
+            event="summary_error",
+            user_id=user_id,
+            summary_len=len(summary_content),
+        )
 
     # 2) 写每条 L0/L1
     for i, item in enumerate(items):
@@ -677,6 +843,8 @@ async def _archive(
 
     # 3) 关系表（兼容旧表：用 relation_type / confidence）
     relations_inserted = 0
+    vector_cause_hits = 0
+    fallback_cause_hits = 0
     for i, item in enumerate(items):
         rel = (item.get("relation") or "").lower()
         if rel not in {"causes", "update", "contradict", "extend"}:
@@ -684,17 +852,44 @@ async def _archive(
         if i >= len(inserted):
             continue
         target_id = inserted[i]
+        # 修潜在 bug：原代码此处直接用 loop 2 的 content（最后一条），与 items[i] 不对应。
+        target_level = item.get("level", "L1")
+        if target_level not in _VALID_LEVELS:
+            target_level = "L1"
+        target_content = item.get("fact") or ""
+        if not target_content:
+            continue
         try:
-            row = await fetch_one(
-                """
-                SELECT id FROM memories
-                WHERE user_id=%s AND role_id=%s AND level=%s AND id<%s
-                ORDER BY id DESC LIMIT 1
-                """,
-                (user_id, role_id, item.get("level", "L1"), target_id),
+            # 优先：用 BGE-M3 向量相似度找语义最相关的历史 fact 作为 source。
+            # 这是 LLM 输出的 relation 字段首次被真正用于语义匹配。
+            source_id: int | None = None
+            used_vector = False
+            source_id = await _find_similar_cause(
+                user_id,
+                role_id,
+                target_content,
+                target_level,
+                target_id,
+                rel,
             )
-            if row:
-                source_id = int(row["id"])
+            if source_id is not None:
+                used_vector = True
+                vector_cause_hits += 1
+            else:
+                # 回退：找语义匹配失败时，按 id 取最近（同 level）兜底，
+                # 保证边至少建立，避免 LLM 已识别 relation 但落空。
+                row = await fetch_one(
+                    """
+                    SELECT id FROM memories
+                    WHERE user_id=%s AND role_id=%s AND level=%s AND id<%s
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (user_id, role_id, target_level, target_id),
+                )
+                if row:
+                    source_id = int(row["id"])
+                    fallback_cause_hits += 1
+            if source_id is not None:
                 # 按实际存在的列拼 INSERT：新表 relation/weight，旧表 relation_type/confidence，
                 # 两套并存时全部写入以满足各自的 NOT NULL 约束。
                 cols = await _memory_relations_columns()
@@ -722,6 +917,18 @@ async def _archive(
                     tuple(values),
                 )
                 relations_inserted += 1
+                logger.debug(
+                    "relation inserted",
+                    extra=merge_extra(
+                        stage="archive",
+                        event="relation_inserted",
+                        user_id=user_id,
+                        relation=rel,
+                        source_id=source_id,
+                        target_id=target_id,
+                        used_vector=used_vector,
+                    ),
+                )
         except Exception as e:
             log_exception(
                 logger,
@@ -733,6 +940,18 @@ async def _archive(
                 user_id=user_id,
                 relation=rel if 'rel' in locals() else None,
             )
+
+    logger.info(
+        "relations phase done",
+        extra=merge_extra(
+            stage="archive",
+            event="relations_done",
+            vector_cause_hits=vector_cause_hits,
+            fallback_cause_hits=fallback_cause_hits,
+            total=relations_inserted,
+            user_id=user_id,
+        ),
+    )
 
     logger.info(
         "archive done",

@@ -204,7 +204,9 @@ class MemorySettings(BaseSettings):
     l1_topk: int = 8
     l2_topk: int = 20
     dedup_threshold: float = 0.92
-    react_max_iter: int = 3
+    # ReAct 工具决策循环最大轮数。复杂多步召回（search_memory → read_memory_full → 再搜 → 回复）
+    # 在 3 轮下会被迫「一次性决策」,提到 8 给 LLM 充足推理空间。
+    react_max_iter: int = 8
     enable_async_extract: bool = True
     # 单次搜索最多返回的命中数；默认 1，UI 只展示最相关的一条。
     search_max_hits: int = 1

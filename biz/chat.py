@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import logging
 import re
@@ -12,7 +13,8 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from config.config import get_settings
-from config.prompts import build_system_prompt
+from config.prompts import build_system_prompt, TOOL_DESCRIPTIONS
+from character.prompts_inject import build_segments
 from llm.client import get_llm_client, parse_tool_call
 from llm.intent import Intent, classify_intent
 from llm.think import _has_open_think, _strip_think
@@ -20,6 +22,7 @@ from memory import build_chat_context, extract_and_archive_async
 from memory.retriever import causal_chain, load_persona
 from tools import adispatch as dispatch_tool
 from utils.request_context import log_exception, log_silent_failure, log_stage, merge_extra
+from utils import request_context as _request_ctx_module
 
 logger = logging.getLogger(__name__)
 
@@ -576,10 +579,20 @@ async def chat_stream(
         emitted_resources.append(res)
         yield res
 
+    # 用 character.build_segments 拼 7 段(M0:persona/traits 段生效,mood/relationship/belief 留空)
+    tool_descs_str = "\n".join(f"- {name}: {desc}" for name, desc in TOOL_DESCRIPTIONS.items())
+    segments = await build_segments(
+        user_id,
+        role_id,
+        l0_memories=ctx.get("l0_memories"),
+        recent_summaries=ctx.get("recent_summaries"),
+        tool_descriptions=tool_descs_str,
+    )
     system_prompt = build_system_prompt(
         persona=ctx["persona"],
         l0_memories=ctx["l0_memories"],
         recent_summaries=ctx["recent_summaries"],
+        segments=segments,
     )
 
     final_text = ""
@@ -838,6 +851,144 @@ async def chat_stream(
     )
     yield {"type": "done", "full": final_text}
 
+    # ===== M2 三桶心情实时更新(在 done 前下发,不影响 done 流)=====
+    # 策略:基于本轮 user_msg 做轻量情感检测 + OCEAN personality_bias
+    # 计算新 mood,下发 mood_update 事件给前端;持久化到 echo-core 异步触发
+    try:
+        from character.mood import (
+            MoodSnapshot, MoodEvent,
+            compute_instant, classify_emotion,
+            valence_to_expression, detect_emotion_fallback,
+            personality_bias_from_traits, mood_to_tone_instruction,
+        )
+        from remote.role_core_client import get_role_core_client
+
+        # 1. 关键词情绪检测(快速回退路径)
+        valence, intensity = detect_emotion_fallback(user_msg)
+
+        # 2. 拉 OCEAN 计算 personality_bias
+        personality_bias = 0.0
+        relationship_influence = 0.0
+        try:
+            from character.traits import load_traits
+            traits_dict = await load_traits(user_id, role_id)
+            if traits_dict:
+                personality_bias = personality_bias_from_traits(
+                    traits_dict["openness"],
+                    traits_dict["agreeableness"],
+                    traits_dict["neuroticism"],
+                )
+        except Exception:
+            pass
+
+        # 3. 拉 relationship intimacy
+        try:
+            import httpx
+            with httpx.Client(timeout=2.0) as _c:
+                _resp = _c.get(
+                    f"{os.getenv('ECHO_CORE_BASE_URL', 'http://localhost:8080')}/api/role-core/relationship",
+                    params={"roleId": role_id},
+                    headers={"X-Session-Id": "", "X-User-Id": user_id},
+                )
+                if _resp.status_code == 200:
+                    _data = _resp.json().get("data") or {}
+                    relationship_influence = (_data.get("intimacy") or 0) * 0.05
+        except Exception:
+            pass
+
+        # 4. 拉现有 mood 快照(用于公式输入)
+        old_snap = MoodSnapshot()
+        try:
+            from database import fetch_one
+            _row = await fetch_one(
+                "SELECT instant_val, instant_intensity, instant_emotion, "
+                "short_val, short_intensity, short_emotion, "
+                "baseline_val, baseline_intensity, baseline_emotion "
+                "FROM role_mood WHERE user_id=%s AND role_id=%s",
+                (int(user_id), int(role_id)) if user_id.isdigit() else (user_id, role_id),
+            )
+            if _row:
+                old_snap = MoodSnapshot(
+                    instant_val=float(_row.get("instant_val") or 0),
+                    instant_intensity=float(_row.get("instant_intensity") or 0),
+                    instant_emotion=str(_row.get("instant_emotion") or "neutral"),
+                    short_val=float(_row.get("short_val") or 0),
+                    short_intensity=float(_row.get("short_intensity") or 0),
+                    short_emotion=str(_row.get("short_emotion") or "neutral"),
+                    baseline_val=float(_row.get("baseline_val") or 0),
+                    baseline_intensity=float(_row.get("baseline_intensity") or 0),
+                    baseline_emotion=str(_row.get("baseline_emotion") or "neutral"),
+                )
+        except Exception:
+            pass
+
+        # 5. 计算 new_instant(无 RNG 噪声)
+        event = MoodEvent(
+            impact=valence,
+            intensity=max(intensity, 0.3),
+            emotion=classify_emotion(valence),
+            personality_bias=personality_bias,
+            relationship_influence=relationship_influence,
+            noise_sigma=0.0,  # 简化：暂不引入随机噪声,保证可重现
+        )
+        new_instant = compute_instant(
+            old_snap.baseline_val,
+            old_snap.short_val,
+            event,
+        )
+        new_emotion = classify_emotion(new_instant)
+        new_intensity = max(intensity, old_snap.instant_intensity)
+        expression = valence_to_expression(new_instant, new_intensity)
+
+        # 6. 仅当 |delta| > 0.15 才下发(避免噪声)
+        if abs(new_instant - old_snap.instant_val) > 0.15:
+            yield {
+                "type": "mood_update",
+                "instantVal": new_instant,
+                "instantIntensity": new_intensity,
+                "instantEmotion": new_emotion,
+                "shortVal": old_snap.short_val,
+                "baselineVal": old_snap.baseline_val,
+                "expression": expression,
+                "valence": valence,
+            }
+
+        # 7. 异步持久化到 echo-core(不阻塞 SSE 流)
+        async def _persist_mood() -> None:
+            try:
+                client = get_role_core_client()
+                await client.report_mood_event(
+                    user_id=user_id,
+                    role_id=role_id,
+                    event_impact=valence,
+                    event_intensity=max(intensity, 0.3),
+                    emotion=new_emotion,
+                    trigger_event="dialogue",
+                )
+            except Exception as e:
+                log_silent_failure(
+                    logger,
+                    "mood persist failed",
+                    exc=e,
+                    stage="mood",
+                    event="persist_failed",
+                    user_id=user_id,
+                    role_id=role_id,
+                )
+
+        asyncio.create_task(_persist_mood())
+
+    except Exception as e:
+        log_silent_failure(
+            logger,
+            "mood update flow failed (non-fatal)",
+            exc=e,
+            stage="mood",
+            event="flow_failed",
+            user_id=user_id,
+            role_id=role_id,
+        )
+
     # 落库到 chat_messages（对话记忆），fire-and-forget 不阻塞 SSE
     try:
         from biz.chat_memory import append_message, bump_retain, upsert_session
@@ -905,6 +1056,64 @@ async def chat_collect(user_id: str, session_id: str, user_msg: str, role_id: st
                 duration_ms=round((time.perf_counter() - t) * 1000, 2),
             )
             events.append({"type": "memory_extracted", "ok": False, "error": str(e)[:200]})
+
+    # M3 完整实现:每轮对话后,从最近 N 轮抽取角色新立场,落地为 pending suggestions。
+    # LLM 不可用 / 抽取失败时静默返回空列表,不阻塞主对话流。
+    try:
+        from character.belief_extractor import (
+            create_suggestions_from_extracted,
+            extract_beliefs_from_conversation,
+        )
+        from character.belief_summary import load_belief_summary
+
+        existing = await load_belief_summary(user_id, role_id)
+        extracted = await extract_beliefs_from_conversation(
+            user_id=user_id,
+            role_id=role_id,
+            recent_n=10,
+            existing_beliefs=existing,
+        )
+        if extracted:
+            t_belief = time.perf_counter()
+            created = await create_suggestions_from_extracted(
+                user_id=user_id,
+                role_id=role_id,
+                extracted=extracted,
+                source="memory_extract",
+            )
+            logger.info(
+                "belief extract -> suggestion create ok",
+                extra=merge_extra(
+                    stage="character.belief_extract",
+                    event="ok",
+                    user_id=user_id,
+                    role_id=role_id,
+                    extracted=len(extracted),
+                    created=created,
+                    duration_ms=round((time.perf_counter() - t_belief) * 1000, 2),
+                ),
+            )
+            events.append(
+                {
+                    "type": "belief_extracted",
+                    "ok": True,
+                    "extracted": len(extracted),
+                    "created": created,
+                }
+            )
+    except Exception as e:
+        log_exception(
+            logger,
+            "belief extract (sync) failed",
+            exc=e,
+            level=logging.WARNING,
+            include_traceback=False,
+            stage="character.belief_extract",
+            event="error",
+            user_id=user_id,
+            role_id=role_id,
+        )
+        events.append({"type": "belief_extracted", "ok": False, "error": str(e)[:200]})
     return {
         "events": events,
         "full": full,

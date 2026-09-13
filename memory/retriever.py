@@ -117,28 +117,92 @@ async def load_l0_memories(user_id: str, limit: int | None = None, role_id: str 
 # ---------- L1 ----------
 
 async def load_l1_summaries(user_id: str, limit: int | None = None, role_id: str = "default") -> list[dict]:
-    """从 MySQL 加载最近 L1/L2 摘要。"""
+    """从 MySQL 加载最近 L1/L2 摘要。
+
+    优化：原先 L1 + L2 共享 top-K（recency ORDER BY），会把 L2 父摘要下的 L1 子条目
+    截掉，导致「拿到子条目的细节却没拿到父条目的语境」。修复：
+    1. 拆分预算：L2 占 ~1/4（至少 2），L1 占剩余。
+    2. 先按 recency 选 L2 + L1。
+    3. 若被选中的 L1 通过 parent_id 指向一个未入选的 L2，按 LLM 写的血缘把那个 L2 拉进来。
+    4. 输出排序：L2 父摘要在前（粗），L1 子条日在后（细），按 id DESC（与 created_at 同序）。
+    """
     if not user_id:
         return []
     settings = get_settings().memory
-    limit = int(limit or settings.l1_topk)
+    total = int(limit or settings.l1_topk)
     t0 = time.perf_counter()
     try:
-        from database import fetch_all
+        from database import fetch_all, fetch_one
         from llm.think import _strip_think
 
-        rows = await fetch_all(
+        # 预算分配：L2 至少 2 槽（保证有父摘要上下文），其余给 L1
+        l2_budget = max(2, total // 4)
+        l1_budget = max(1, total - l2_budget)
+
+        # 1) 最近 L2 父摘要
+        l2_rows = await fetch_all(
             """
-            SELECT id, level, content, summary, emotion_tag, emotion_intensity, created_at
+            SELECT id, level, content, summary, emotion_tag, emotion_intensity, parent_id, created_at
             FROM memories
-            WHERE user_id=%s AND role_id=%s AND level IN ('L1','L2')
-            ORDER BY created_at DESC
+            WHERE user_id=%s AND role_id=%s AND level='L2'
+            ORDER BY id DESC
             LIMIT %s
             """,
-            (user_id, role_id, max(1, limit)),
+            (user_id, role_id, l2_budget),
         )
-        out = []
-        for r in rows:
+        l2_ids: set[int] = {int(r["id"]) for r in l2_rows}
+
+        # 2) 最近 L1 子条目
+        l1_rows = await fetch_all(
+            """
+            SELECT id, level, content, summary, emotion_tag, emotion_intensity, parent_id, created_at
+            FROM memories
+            WHERE user_id=%s AND role_id=%s AND level='L1'
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (user_id, role_id, l1_budget),
+        )
+
+        # 3) 血缘补齐：被选中的 L1 若 parent_id 指向未入选的 L2，按 id 反查拉进来。
+        #    这是 parent_id 字段首次在检索路径被实际使用。
+        required_parent_ids: set[int] = {
+            int(l1["parent_id"]) for l1 in l1_rows if l1.get("parent_id")
+        }
+        missing_parents: set[int] = required_parent_ids - l2_ids
+        if missing_parents:
+            # IN 查询一次拿全，避免逐条 round-trip
+            placeholders = ", ".join(["%s"] * len(missing_parents))
+            extra = await fetch_all(
+                f"""
+                SELECT id, level, content, summary, emotion_tag, emotion_intensity, parent_id, created_at
+                FROM memories
+                WHERE user_id=%s AND role_id=%s AND level='L2' AND id IN ({placeholders})
+                """,
+                (user_id, role_id, *missing_parents),
+            )
+            for row in extra:
+                l2_rows.append(row)
+                l2_ids.add(int(row["id"]))
+
+        # 4) L2 排序：被 L1 引用的父摘要优先，其余按 id DESC。截到预算。
+        #    - parent 排前（让 LLM 先看到粗粒度语境）
+        #    - 同优先级内 id 大者优先（与 created_at DESC 等价）
+        def _l2_sort_key(row: dict) -> tuple[int, int]:
+            is_parent = 0 if int(row["id"]) in required_parent_ids else 1
+            return (is_parent, -int(row["id"]))
+
+        l2_rows.sort(key=_l2_sort_key)
+        if len(l2_rows) > l2_budget:
+            l2_rows = l2_rows[:l2_budget]
+
+        # 5) L1 排序：单纯 id DESC；数量已在第 2 步限制在 l1_budget
+        l1_rows.sort(key=lambda r: -int(r["id"]))
+
+        # 6) 合并 + 格式化（保持原输出 schema：id / level / text / emotion_*）
+        combined = l2_rows + l1_rows
+        out: list[dict] = []
+        for r in combined:
             raw = r.get("summary") or r.get("content") or ""
             text = _strip_think(raw)
             out.append(
@@ -157,7 +221,10 @@ async def load_l1_summaries(user_id: str, limit: int | None = None, role_id: str
                 event="ok",
                 user_id=user_id,
                 count=len(out),
-                limit=limit,
+                l2_count=len(l2_rows),
+                l1_count=len(l1_rows),
+                parent_ids_brought_in=len(missing_parents),
+                limit=total,
                 duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             ),
         )

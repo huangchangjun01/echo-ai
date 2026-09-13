@@ -37,7 +37,7 @@ MEMORY_EXTRACT_SYSTEM = """你是一名记忆抽取助手，负责把对话中�
 - "level": L0（长期偏好/关系/身份/重要承诺）或 L1（近期事件/短期上下文）
 - "emotion": 情绪标签（如 joy / sadness / anger / surprise / fear / neutral）
 - "intensity": 0~1 之间的情感强度
-- "relation": 相对历史的 "causes" / "update" / "contradict" / "extend"（无则为空）
+- "relation": 相对历史的 "causes" / "update" / "contradict" / "extend"（**必填**！如果跟某条历史 fact 主题相近默认 "extend"，如果反转/推翻默认 "contradict"，如果更新某项细节默认 "update"，如果导致/引发另一事实默认 "causes"；实在无关联用空字符串 ""）
 
 【输出格式硬性要求】
 1. 只输出 JSON 数组本身，不要用 markdown 代码块包裹（不要 ```json ... ```）。
@@ -150,8 +150,63 @@ def build_system_prompt(
     persona: str,
     l0_memories: list[str],
     recent_summaries: list[str],
+    *,
+    segments: dict[str, str] | None = None,
 ) -> str:
-    """拼装 LLM 系统提示：人格 + L0 核心记忆 + L1 近期摘要 + 工具描述。"""
+    """拼装 LLM 系统提示：人格 + L0 核心记忆 + L1 近期摘要 + 工具描述。
+
+    兼容两种调用模式:
+    1. 旧模式: 直接传 persona / l0_memories / recent_summaries 字符串
+    2. 新模式: 传 segments(7 段 dict,由 character.build_segments 生成) ,
+       内部的 persona / l0_memories / recent_summaries 参数被忽略,
+       以 segments 中的为准(更细粒度的 OCEAN/Mood/Relationship/Belief 注入)
+
+    PRD 06_PRD_prompt_strategy.md: 7 段 system prompt 注入硬上限 <= 2300 token。
+    """
+    if segments is not None:
+        # 新模式:从 7 段 dict 拼装
+        persona_block = segments.get("persona") or (persona or DEFAULT_PERSONA)
+        traits_block = segments.get("traits") or ""
+        mood_block = segments.get("mood") or ""
+        rel_block = segments.get("relationship") or ""
+        belief_block = segments.get("belief_summary") or ""
+        l0_block = segments.get("L0_memories") or (
+            "\n".join(f"- {m}" for m in l0_memories) if l0_memories else "（暂无）"
+        )
+        recent_block = segments.get("L1_summ") or (
+            "\n".join(f"- {s}" for s in recent_summaries) if recent_summaries else "（暂无）"
+        )
+        tool_block = segments.get("tool_descs") or "\n".join(
+            f"- {name}: {desc}" for name, desc in TOOL_DESCRIPTIONS.items()
+        )
+
+        # 7 段拼装模板(沿用 SYSTEM_PROMPT_TEMPLATE 风格)
+        # mood/relationship/belief 为空时整段省略(避免冗余)
+        optional_segments = []
+        if traits_block:
+            optional_segments.append(f"【性格底色】\n{traits_block}")
+        if mood_block:
+            optional_segments.append(f"【当前心情】\n{mood_block}")
+        if rel_block:
+            optional_segments.append(f"【关系状态】\n{rel_block}")
+        if belief_block:
+            optional_segments.append(f"【信念摘要】\n{belief_block}")
+        optional_str = "\n\n".join(optional_segments)
+
+        return (
+            f"【人格】\n{persona_block}\n\n"
+            f"{optional_str}\n\n"
+            f"【核心记忆（L0 · 长期事实）】\n{l0_block}\n\n"
+            f"【近期记忆（L1 · 摘要）】\n{recent_block}\n\n"
+            f"【可用工具】\n{tool_block}\n\n"
+            "【输出格式】\n"
+            "- 默认使用自然语言回复；当你决定调用工具时，必须输出严格的 JSON：\n"
+            '  {"tool": "<tool_name>", "args": {...}}\n'
+            "- 当所有工具调用完毕或无需调用时，直接输出对用户的自然语言回复，不要再夹杂 JSON。\n"
+            "- 单次回复最多触发一次工具调用。\n"
+        )
+
+    # 旧模式(兼容)
     persona = persona or DEFAULT_PERSONA
     l0_block = "\n".join(f"- {m}" for m in l0_memories) if l0_memories else "（暂无）"
     recent_block = "\n".join(f"- {s}" for s in recent_summaries) if recent_summaries else "（暂无）"

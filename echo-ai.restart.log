@@ -1,0 +1,1330 @@
+INFO:     Started server process [48856]
+INFO:     Waiting for application startup.
+2026-09-09 15:57:14.254  INFO    app.agent_runner [lifespan_start·start] taskName=Task-2 version=2.0.0 threshold=0.3 llm_model=MiniMax-M3 llm_base_url=https://api.minimaxi.com/v1 db_host=8.130.81.41 db_port=3306 db_name=huangchangjun weaviate_url=http://8.130.81.41:8080 weaviate_class=EchoDoc memory_class=EchoMemory small_model=MiniMax-M3 bge_model=BAAI/bge-m3 embed_model=OFA-Sys/chinese-clip-vit-base-patch16 embed_dim=512 bge_dim=1024 host=0.0.0.0 port=8000  "Echo-AI starting"
+2026-09-09 15:57:14.480  INFO    database.mysql  taskName=Task-2  "aiomysql pool created: 8.130.81.41:3306/huangchangjun"
+2026-09-09 15:57:14.480  INFO    database.mysql [db_pool·ok] taskName=Task-2 backend=aiomysql duration_ms=221.17  "mysql pool ready"
+2026-09-09 15:57:16.478  INFO    database.mysql [init_schema·ok] taskName=Task-2 duration_ms=2218.69  "MySQL schema ensured"
+2026-09-09 15:57:16.478  INFO    app.agent_runner [init_schema·ok] taskName=Task-2 duration_ms=2223.92  "MySQL schema ready"
+2026-09-09 15:57:16.478  INFO    app.agent_runner [bge_warmup·scheduled] taskName=Task-2  "BGE-M3 warmup scheduled"
+2026-09-09 15:57:16.478  INFO    app.agent_runner [lifespan_start·end] taskName=Task-2 ok=True  "Echo-AI agent ready"
+2026-09-09 15:57:16.480  INFO    biz.chat_memory  taskName=Task-5  "chat memory GC loop started | interval=21600s"
+E:\Python\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Integer display width is deprecated and will be removed in a future release.
+  await self._query(query)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-09-09 15:57:16.710  INFO    biz.chat_memory [chat_memory_gc·ok] taskName=Task-5 touched_tables=2  "chat_memory gc done"
+2026-09-09 15:57:16.785  INFO    utils.model_cache [model_cache·hit] model=BAAI/bge-m3 cache_dir=C:\Users\h4215\.cache\huggingface\hub snapshot=C:\Users\h4215\.cache\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181  "model cache hit, load locally"
+2026-09-09 15:57:16.786  INFO    embedding.bge_m3 [bge_load·start] model=BAAI/bge-m3 device=cpu endpoint=https://hf-mirror.com cache_dir=C:\Users\h4215\.cache\huggingface\hub local_files_only=True  "loading BGE-M3"
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 25256.00it/s]2026-09-09 15:57:22.776  INFO    embedding.bge_m3 [bge_load·ok] model=BAAI/bge-m3 device=cpu cache_dir=C:\Users\h4215\.cache\huggingface\hub duration_ms=6296.33  "BGE-M3 model loaded"
+2026-09-09 15:57:23.040  INFO    embedding.bge_m3 [bge_warmup·ok] device=cpu duration_ms=263.29  "BGE-M3 warmup done"
+2026-09-09 15:57:23.041  INFO    app.agent_runner [bge_warmup·ok] taskName=Task-4 duration_ms=6562.34  "BGE-M3 warmup done"
+INFO:     127.0.0.1:53021 - "GET /health HTTP/1.1" 200 OK
+2026-09-09 15:59:06.046  INFO    app.agent_runner  taskName=Task-14 stream=False msg_len=4 msg_preview=随便聊聊 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "/chat received"
+2026-09-09 15:59:06.047  INFO    biz.chat [chat_stream·start] taskName=Task-14 msg_len=4 msg_preview=随便聊聊 react_max_iter=8 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "chat_stream start"
+2026-09-09 15:59:09.066  INFO    llm.client [small_chat·ok] taskName=Task-14 model=MiniMax-M3 msg_count=2 prompt_tokens=437 completion_tokens=33 total_tokens=470 choices=1 duration_ms=2519.44 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "small LLM chat ok"
+2026-09-09 15:59:09.067  INFO    llm.intent [intent_classify·ok] taskName=Task-14 intent=chat msg_preview=随便聊聊 duration_ms=2520.03 llm_raw_preview=<think>User says "随便聊聊" - just casual chat. No search/recall intent.</think>  {" user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "intent classified"
+2026-09-09 15:59:09.067  INFO    biz.chat [chat_stream·react_decision] taskName=Task-14 intent=chat intent_source=llm intent_ms=2520.03 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "react decision"
+2026-09-09 15:59:09.067  INFO    biz.chat [context_build·start] taskName=Task-14 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "building chat context"
+2026-09-09 15:59:09.067  INFO    memory.retriever [build_chat_context·start] taskName=Task-14 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "build_chat_context begin"
+2026-09-09 15:59:09.147  INFO    memory.retriever [persona·fallback_default] taskName=Task-15 user_id=54 duration_ms=79.87 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "load_persona fallback"
+2026-09-09 15:59:09.324  WARNING database.mysql [db·slow] taskName=Task-17 op=fetch_all sql=SELECT id, level, content, summary, emotion_tag, emotion_intensity, parent_id, created_at FROM memories WHERE user_id=%s AND role_id=%s AND level='L2' ORDER BY id DESC LIMIT %s params=3 rows=0 attempt=1 duration_ms=255.47 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "slow sql"
+2026-09-09 15:59:09.328  WARNING database.mysql [db·slow] taskName=Task-16 op=fetch_all sql=SELECT id, content, memory_type AS category, vector_id, created_at, updated_at FROM memories WHERE user_id=%s AND role_id=%s AND level='L0' ORDER BY updated_at DESC LIMIT %s params=3 rows=0 attempt=1 duration_ms=260.36 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "slow sql"
+2026-09-09 15:59:09.328  INFO    memory.retriever [memory_l0·ok] taskName=Task-16 user_id=54 count=0 limit=20 duration_ms=260.7 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "load_l0_memories ok"
+2026-09-09 15:59:09.381  INFO    memory.retriever [memory_l1·ok] taskName=Task-17 user_id=54 count=0 l2_count=0 l1_count=0 parent_ids_brought_in=0 limit=8 duration_ms=312.39 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "load_l1_summaries ok"
+2026-09-09 15:59:09.381  INFO    memory.retriever [build_chat_context·end] taskName=Task-14 ok=True duration_ms=314.07 enable_multimodal=False l1_hit_count=0 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "build_chat_context ok"
+2026-09-09 15:59:09.381  INFO    biz.chat [context_build·end] taskName=Task-14 ok=True duration_ms=314.25 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=0 intent=chat user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "context_build ok"
+2026-09-09 15:59:09.903  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-14 intent=chat intent_source=llm seed_len=2 system_len=676 injected_l1_hint=False injected_tool_hint=False user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "react seed ready"
+2026-09-09 15:59:10.006  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=96.53 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "BGE-M3 embed ok"
+2026-09-09 15:59:10.262  INFO    vector.recall_store  taskName=Task-14 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "RecallVectorStore at http://8.130.81.41:8080 class=EchoRecall"
+2026-09-09 15:59:10.803  INFO    biz.recall_search [recall_search·ok] taskName=Task-14 user_id=54 role_id=46 top_k=5 hits=0 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "recall search ok"
+2026-09-09 15:59:15.530  INFO    llm.client [small_chat·ok] taskName=Task-14 model=MiniMax-M3 msg_count=3 prompt_tokens=511 completion_tokens=52 total_tokens=563 choices=1 duration_ms=4726.76 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "small LLM chat ok"
+2026-09-09 15:59:15.530  INFO    biz.chat [react_decision·ok] taskName=Task-14 iter=0 out_len=2 has_think=True duration_ms=4727.31 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "react decision ok"
+2026-09-09 15:59:15.531  INFO    biz.chat [react_loop·no_tool] taskName=Task-14 iter=0 out_len=2 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "react no tool call (hand off to reply generation)"
+2026-09-09 15:59:15.531  INFO    biz.chat [react_loop·end] taskName=Task-14 tools_called=0 exhausted=False user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "react loop end"
+2026-09-09 15:59:17.722  INFO    llm.client [small_stream·end] taskName=Task-14 model=MiniMax-M3 delta_count=41 out_chars=365 first_delta_ms=852.2 duration_ms=2190.75 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "small_stream end"
+2026-09-09 15:59:17.722  INFO    biz.chat [chat_stream·reply_streamed] taskName=Task-14 model=MiniMax-M3 raw_len=365 reply_len=44 duration_ms=2191.11 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "chat reply streamed"
+2026-09-09 15:59:17.722  INFO    biz.chat [chat_stream·end] taskName=Task-14 final_len=44 tool_count=0 context_build_ms=8655.19 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "chat_stream end"
+2026-09-09 15:59:18.191  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-14 user_id=54 session_id=ocean-test-1788940745316 user_msg_len=4 assistant_msg_len=44 request_id=229df3e35bd84b8a821faa86ff412a09  "extract_and_archive_async start"
+2026-09-09 15:59:18.429  WARNING database.mysql [db·slow] taskName=Task-14 op=execute sql=INSERT INTO memory_extract_logs (user_id, session_id, user_msg, assistant_msg, status) VALUES (%s, %s, %s, %s, 'pending') params=4 rows=1 attempt=1 duration_ms=237.81 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "slow sql"
+2026-09-09 15:59:18.432  WARNING remote.role_core_client [role_core_client·http_error] taskName=Task-30 status=401 path=/api/role-core/mood/event user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "role_core_client POST /api/role-core/mood/event failed: status=401 body={"code":401,"message":"internal token mismatch"}"
+2026-09-09 15:59:24.462  INFO    llm.client [llm_chat·ok] taskName=Task-14 model=MiniMax-M3 msg_count=2 prompt_tokens=516 completion_tokens=108 total_tokens=624 choices=1 duration_ms=5955.7 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "LLM chat ok"
+2026-09-09 15:59:24.462  INFO    memory.extractor [llm_extract·empty] taskName=Task-14 reason=no_array_found raw_preview=<think>The user wants me to extract long-term memorable facts from this short conversation. The conversation is very casual - just a greeting exchange with no substantive content.  Let me analyze: - U cleaned_preview=[] duration_ms=5955.95 user_msg_len=4 assistant_msg_len=44 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "llm_extract empty list"
+2026-09-09 15:59:24.462  INFO    memory.extractor [extract_and_archive·empty] taskName=Task-14 user_id=54 duration_ms=5956.11 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "extract_and_archive skip (no items)"
+2026-09-09 15:59:24.522  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-14 user_id=54 inserted=0 summary_len=0 duration_ms=6330.53 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "memory extract done"
+2026-09-09 15:59:24.522  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-14 duration_ms=6330.84 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "memory extract (sync) ok"
+2026-09-09 15:59:26.627  INFO    llm.client [llm_chat·ok] taskName=Task-14 model=MiniMax-M3 msg_count=2 prompt_tokens=462 completion_tokens=131 total_tokens=593 choices=1 duration_ms=2021.0 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "LLM chat ok"
+2026-09-09 15:59:26.628  WARNING character.belief_extractor [character.belief_extract·failed] taskName=Task-14 user_id=54 role_id=46 error_type=JSONDecodeError error_msg=Expecting value: line 1 column 1 (char 0) error_module=json.decoder error_class=json.decoder.JSONDecodeError session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "extract_beliefs_from_conversation failed"
+2026-09-09 15:59:26.628  INFO    app.agent_runner [-·end] taskName=Task-14 ok=True stream=False reply_len=44 reply_preview=嗨～我在呀！今天过得怎么样？有什么想聊的，或者有什么有趣的事、烦心事，都可以说说哦 :) events=17 chat_latency_ms=20580 duration_ms=20581.22 user_id=54 session_id=ocean-test-1788940745316 request_id=229df3e35bd84b8a821faa86ff412a09  "/chat done"
+INFO:     127.0.0.1:57630 - "POST /chat HTTP/1.1" 200 OK
+2026-09-09 15:59:49.417  INFO    app.agent_runner  taskName=Task-41 stream=False msg_len=4 msg_preview=随便聊聊 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "/chat received"
+2026-09-09 15:59:49.417  INFO    biz.chat [chat_stream·start] taskName=Task-41 msg_len=4 msg_preview=随便聊聊 react_max_iter=8 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "chat_stream start"
+2026-09-09 15:59:55.507  INFO    llm.client [small_chat·ok] taskName=Task-41 model=MiniMax-M3 msg_count=2 prompt_tokens=437 completion_tokens=47 total_tokens=484 choices=1 duration_ms=6089.44 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "small LLM chat ok"
+2026-09-09 15:59:55.507  INFO    llm.intent [intent_classify·ok] taskName=Task-41 intent=chat msg_preview=随便聊聊 duration_ms=6089.69 llm_raw_preview=<think>The user says "随便聊聊" which means "just chat casually". This is clearly a  user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "intent classified"
+2026-09-09 15:59:55.507  INFO    biz.chat [chat_stream·react_decision] taskName=Task-41 intent=chat intent_source=llm intent_ms=6089.69 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "react decision"
+2026-09-09 15:59:55.507  INFO    biz.chat [context_build·start] taskName=Task-41 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "building chat context"
+2026-09-09 15:59:55.507  INFO    memory.retriever [build_chat_context·start] taskName=Task-41 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "build_chat_context begin"
+2026-09-09 15:59:55.592  INFO    memory.retriever [persona·fallback_default] taskName=Task-42 user_id=54 duration_ms=85.15 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "load_persona fallback"
+2026-09-09 15:59:55.593  INFO    memory.retriever [memory_l0·ok] taskName=Task-43 user_id=54 count=0 limit=20 duration_ms=85.29 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "load_l0_memories ok"
+2026-09-09 15:59:55.836  WARNING database.mysql [db·slow] taskName=Task-44 op=fetch_all sql=SELECT id, level, content, summary, emotion_tag, emotion_intensity, parent_id, created_at FROM memories WHERE user_id=%s AND role_id=%s AND level='L2' ORDER BY id DESC LIMIT %s params=3 rows=0 attempt=1 duration_ms=328.52 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "slow sql"
+2026-09-09 15:59:56.014  INFO    memory.retriever [memory_l1·ok] taskName=Task-44 user_id=54 count=0 l2_count=0 l1_count=0 parent_ids_brought_in=0 limit=8 duration_ms=506.59 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "load_l1_summaries ok"
+2026-09-09 15:59:56.015  INFO    memory.retriever [build_chat_context·end] taskName=Task-41 ok=True duration_ms=507.55 enable_multimodal=False l1_hit_count=0 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "build_chat_context ok"
+2026-09-09 15:59:56.015  INFO    biz.chat [context_build·end] taskName=Task-41 ok=True duration_ms=507.75 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=0 intent=chat user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "context_build ok"
+2026-09-09 15:59:56.322  WARNING database.mysql [db·slow] taskName=Task-41 op=fetch_one sql=SELECT persona FROM personas WHERE user_id=%s params=1 rows=0 attempt=1 duration_ms=215.65 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "slow sql"
+2026-09-09 15:59:56.668  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-41 intent=chat intent_source=llm seed_len=2 system_len=676 injected_l1_hint=False injected_tool_hint=False user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "react seed ready"
+2026-09-09 15:59:56.765  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=96.87 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "BGE-M3 embed ok"
+2026-09-09 15:59:56.925  INFO    biz.recall_search [recall_search·ok] taskName=Task-41 user_id=54 role_id=47 top_k=5 hits=0 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "recall search ok"
+2026-09-09 16:00:00.410  INFO    llm.client [small_chat·ok] taskName=Task-41 model=MiniMax-M3 msg_count=3 prompt_tokens=522 completion_tokens=93 total_tokens=615 choices=1 duration_ms=3484.66 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "small LLM chat ok"
+2026-09-09 16:00:00.410  INFO    biz.chat [react_decision·ok] taskName=Task-41 iter=0 out_len=2 has_think=True duration_ms=3485.02 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "react decision ok"
+2026-09-09 16:00:00.410  INFO    biz.chat [react_loop·no_tool] taskName=Task-41 iter=0 out_len=2 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "react no tool call (hand off to reply generation)"
+2026-09-09 16:00:00.410  INFO    biz.chat [react_loop·end] taskName=Task-41 tools_called=0 exhausted=False user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "react loop end"
+2026-09-09 16:00:07.022  INFO    llm.client [small_stream·end] taskName=Task-41 model=MiniMax-M3 delta_count=9 out_chars=817 first_delta_ms=2899.95 duration_ms=6611.55 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "small_stream end"
+2026-09-09 16:00:07.022  INFO    biz.chat [chat_stream·reply_streamed] taskName=Task-41 model=MiniMax-M3 raw_len=817 reply_len=61 duration_ms=6611.81 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "chat reply streamed"
+2026-09-09 16:00:07.022  INFO    biz.chat [chat_stream·end] taskName=Task-41 final_len=61 tool_count=0 context_build_ms=11515.04 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "chat_stream end"
+2026-09-09 16:00:07.416  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-41 user_id=54 session_id=ocean-test-1788940787738 user_msg_len=4 assistant_msg_len=61 request_id=7832e54606d0453399554615466f9f1b  "extract_and_archive_async start"
+2026-09-09 16:00:07.639  WARNING database.mysql [db·slow] taskName=Task-41 op=execute sql=INSERT INTO memory_extract_logs (user_id, session_id, user_msg, assistant_msg, status) VALUES (%s, %s, %s, %s, 'pending') params=4 rows=1 attempt=1 duration_ms=222.77 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "slow sql"
+2026-09-09 16:00:07.643  WARNING remote.role_core_client [role_core_client·http_error] taskName=Task-57 status=401 path=/api/role-core/mood/event user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "role_core_client POST /api/role-core/mood/event failed: status=401 body={"code":401,"message":"internal token mismatch"}"
+2026-09-09 16:00:11.733  INFO    llm.client [llm_chat·ok] taskName=Task-41 model=MiniMax-M3 msg_count=2 prompt_tokens=528 completion_tokens=261 total_tokens=789 choices=1 duration_ms=3914.91 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "LLM chat ok"
+2026-09-09 16:00:11.734  INFO    memory.extractor [llm_extract·empty] taskName=Task-41 reason=no_array_found raw_preview=<think>The user said "随便聊聊" (just chat casually) and the assistant responded with a friendly greeting asking about their day. There's very little substantive information here - it's just casual chitch cleaned_preview=[] duration_ms=3915.18 user_msg_len=4 assistant_msg_len=61 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "llm_extract empty list"
+2026-09-09 16:00:11.734  INFO    memory.extractor [extract_and_archive·empty] taskName=Task-41 user_id=54 duration_ms=3915.3 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "extract_and_archive skip (no items)"
+2026-09-09 16:00:11.771  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-41 user_id=54 inserted=0 summary_len=0 duration_ms=4355.52 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "memory extract done"
+2026-09-09 16:00:11.772  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-41 duration_ms=4355.98 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "memory extract (sync) ok"
+2026-09-09 16:00:14.025  INFO    llm.client [llm_chat·ok] taskName=Task-41 model=MiniMax-M3 msg_count=2 prompt_tokens=474 completion_tokens=64 total_tokens=538 choices=1 duration_ms=2188.37 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "LLM chat ok"
+2026-09-09 16:00:14.025  WARNING character.belief_extractor [character.belief_extract·failed] taskName=Task-41 user_id=54 role_id=47 error_type=JSONDecodeError error_msg=Expecting value: line 1 column 1 (char 0) error_module=json.decoder error_class=json.decoder.JSONDecodeError session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "extract_beliefs_from_conversation failed"
+2026-09-09 16:00:14.025  INFO    app.agent_runner [-·end] taskName=Task-41 ok=True stream=False reply_len=61 reply_preview=哈喽！随便聊聊挺好的 ☺️  今天过得怎么样呀？有没有什么有趣的小事想说说？或者你有啥想问我的、想聊的，都可以～我在呢 😊 events=6 chat_latency_ms=24608 duration_ms=24608.19 user_id=54 session_id=ocean-test-1788940787738 request_id=7832e54606d0453399554615466f9f1b  "/chat done"
+INFO:     127.0.0.1:57496 - "POST /chat HTTP/1.1" 200 OK
+2026-09-09 16:01:59.105  INFO    app.agent_runner  taskName=Task-68 stream=False msg_len=4 msg_preview=随便聊聊 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "/chat received"
+2026-09-09 16:01:59.105  INFO    biz.chat [chat_stream·start] taskName=Task-68 msg_len=4 msg_preview=随便聊聊 react_max_iter=8 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "chat_stream start"
+2026-09-09 16:02:00.780  INFO    llm.client [small_chat·ok] taskName=Task-68 model=MiniMax-M3 msg_count=2 prompt_tokens=437 completion_tokens=47 total_tokens=484 choices=1 duration_ms=1675.1 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "small LLM chat ok"
+2026-09-09 16:02:00.781  INFO    llm.intent [intent_classify·ok] taskName=Task-68 intent=chat msg_preview=随便聊聊 duration_ms=1675.33 llm_raw_preview=<think> The user says "随便聊聊" which means "just chat casually". This is clearly a user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "intent classified"
+2026-09-09 16:02:00.781  INFO    biz.chat [chat_stream·react_decision] taskName=Task-68 intent=chat intent_source=llm intent_ms=1675.33 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "react decision"
+2026-09-09 16:02:00.781  INFO    biz.chat [context_build·start] taskName=Task-68 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "building chat context"
+2026-09-09 16:02:00.781  INFO    memory.retriever [build_chat_context·start] taskName=Task-68 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "build_chat_context begin"
+2026-09-09 16:02:00.820  INFO    memory.retriever [persona·fallback_default] taskName=Task-69 user_id=54 duration_ms=39.05 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "load_persona fallback"
+2026-09-09 16:02:00.829  INFO    memory.retriever [memory_l0·ok] taskName=Task-70 user_id=54 count=0 limit=20 duration_ms=47.4 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "load_l0_memories ok"
+2026-09-09 16:02:00.883  INFO    memory.retriever [memory_l1·ok] taskName=Task-71 user_id=54 count=0 l2_count=0 l1_count=0 parent_ids_brought_in=0 limit=8 duration_ms=102.07 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "load_l1_summaries ok"
+2026-09-09 16:02:00.884  INFO    memory.retriever [build_chat_context·end] taskName=Task-68 ok=True duration_ms=102.83 enable_multimodal=False l1_hit_count=0 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "build_chat_context ok"
+2026-09-09 16:02:00.884  INFO    biz.chat [context_build·end] taskName=Task-68 ok=True duration_ms=103.06 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=0 intent=chat user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "context_build ok"
+2026-09-09 16:02:01.392  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-68 intent=chat intent_source=llm seed_len=2 system_len=676 injected_l1_hint=False injected_tool_hint=False user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "react seed ready"
+2026-09-09 16:02:01.490  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=97.41 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "BGE-M3 embed ok"
+2026-09-09 16:02:01.850  INFO    biz.recall_search [recall_search·ok] taskName=Task-68 user_id=54 role_id=48 top_k=5 hits=0 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "recall search ok"
+2026-09-09 16:02:03.145  INFO    llm.client [small_chat·ok] taskName=Task-68 model=MiniMax-M3 msg_count=3 prompt_tokens=511 completion_tokens=23 total_tokens=534 choices=1 duration_ms=1294.92 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "small LLM chat ok"
+2026-09-09 16:02:03.145  INFO    biz.chat [react_decision·ok] taskName=Task-68 iter=0 out_len=2 has_think=True duration_ms=1295.25 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "react decision ok"
+2026-09-09 16:02:03.145  INFO    biz.chat [react_loop·no_tool] taskName=Task-68 iter=0 out_len=2 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "react no tool call (hand off to reply generation)"
+2026-09-09 16:02:03.145  INFO    biz.chat [react_loop·end] taskName=Task-68 tools_called=0 exhausted=False user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "react loop end"
+2026-09-09 16:02:05.339  INFO    llm.client [small_stream·end] taskName=Task-68 model=MiniMax-M3 delta_count=69 out_chars=258 first_delta_ms=706.62 duration_ms=2194.06 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "small_stream end"
+2026-09-09 16:02:05.340  INFO    biz.chat [chat_stream·reply_streamed] taskName=Task-68 model=MiniMax-M3 raw_len=258 reply_len=115 duration_ms=2194.39 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "chat reply streamed"
+2026-09-09 16:02:05.340  INFO    biz.chat [chat_stream·end] taskName=Task-68 final_len=115 tool_count=0 context_build_ms=4559.06 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "chat_stream end"
+2026-09-09 16:02:05.783  INFO    memory.extractor [extract_and_archive_async·start] taskName=Task-68 user_id=54 session_id=ocean-test-1788940915467 user_msg_len=4 assistant_msg_len=115 request_id=915ea52198254042801a5875a236f64c  "extract_and_archive_async start"
+2026-09-09 16:02:06.038  WARNING database.mysql [db·slow] taskName=Task-68 op=execute sql=INSERT INTO memory_extract_logs (user_id, session_id, user_msg, assistant_msg, status) VALUES (%s, %s, %s, %s, 'pending') params=4 rows=1 attempt=1 duration_ms=254.5 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "slow sql"
+2026-09-09 16:02:06.040  WARNING remote.role_core_client [role_core_client·http_error] taskName=Task-84 status=401 path=/api/role-core/mood/event user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "role_core_client POST /api/role-core/mood/event failed: status=401 body={"code":401,"message":"internal token mismatch"}"
+2026-09-09 16:02:17.719  INFO    llm.client [llm_chat·ok] taskName=Task-68 model=MiniMax-M3 msg_count=2 prompt_tokens=549 completion_tokens=499 total_tokens=1048 choices=1 duration_ms=11636.16 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "LLM chat ok"
+2026-09-09 16:02:17.720  INFO    memory.extractor [llm_extract·ok] taskName=Task-68 count=2 raw_items=2 duration_ms=11636.46 user_msg_len=4 assistant_msg_len=115 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "llm_extract ok"
+2026-09-09 16:02:17.870  INFO    embedding.bge_m3 [bge_embed·ok] count=2 batch_size=8 fallback=False dim=1024 duration_ms=150.19 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "BGE-M3 embed ok"
+2026-09-09 16:02:18.131  INFO    vector.memory_store  user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "MemoryVectorStore at http://8.130.81.41:8080 class=EchoMemory"
+2026-09-09 16:02:18.505  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=54 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=169.48 duration_ms=170.44 query_preview=用户表示想随便聊聊，没有特定话题 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "memory vector query"
+2026-09-09 16:02:18.610  INFO    vector.memory_store [memory_vector_query·ok] class_name=EchoMemory tenant=54 n_results=5 fetch_limit=50 threshold=0.7 raw_hits=0 final_hits=0 top_score=0.0 median_score=0.0 embed_ms=0.0 http_ms=103.55 duration_ms=104.41 query_preview=助手自我介绍名叫Echo user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "memory vector query"
+2026-09-09 16:02:18.611  INFO    memory.extractor [extract_and_archive·dedup] taskName=Task-68 user_id=54 extracted=2 kept=2 skipped=0 threshold=0.92 embed_ms=150.86 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "extract dedup summary"
+2026-09-09 16:02:18.750  INFO    embedding.bge_m3 [bge_embed·ok] count=2 batch_size=8 fallback=False dim=1024 duration_ms=138.61 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "BGE-M3 embed ok"
+2026-09-09 16:02:18.925  INFO    vector.memory_store [memory_vector_add·ok] class_name=EchoMemory count=2 http_ms=174.37 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "memory insert"
+2026-09-09 16:02:18.925  INFO    memory.extractor [vectorize_and_store·ok] taskName=Task-68 user_id=54 count=2 embed_ms=139.16 write_ms=175.09 duration_ms=314.45 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "vectorize_and_store ok"
+2026-09-09 16:02:22.632  INFO    llm.client [llm_chat·ok] taskName=Task-68 model=MiniMax-M3 msg_count=2 prompt_tokens=220 completion_tokens=77 total_tokens=297 choices=1 duration_ms=3706.18 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "LLM chat ok"
+2026-09-09 16:02:22.632  INFO    memory.extractor [summarize·ok] taskName=Task-68 user_id=54 input_count=2 out_len=53 duration_ms=3706.41 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "summarize ok"
+2026-09-09 16:02:22.726  INFO    memory.extractor [archive·summary_inserted] taskName=Task-68 user_id=54 summary_id=856 summary_len=53 placeholder=False session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "archive summary inserted"
+2026-09-09 16:02:23.044  INFO    memory.extractor [archive·relations_done] taskName=Task-68 vector_cause_hits=0 fallback_cause_hits=0 total=0 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "relations phase done"
+2026-09-09 16:02:23.044  INFO    memory.extractor [archive·end] taskName=Task-68 user_id=54 inserted=2 relations=0 summary_id=856 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "archive done"
+2026-09-09 16:02:23.044  INFO    memory.extractor [extract_and_archive·end] taskName=Task-68 user_id=54 extracted=2 kept=2 inserted=2 vector_stored=2 summary_len=53 duration_ms=16960.66 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "extract_and_archive done"
+2026-09-09 16:02:23.085  INFO    memory.extractor [extract_and_archive_async·ok] taskName=Task-68 user_id=54 inserted=2 summary_len=53 duration_ms=17301.18 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "memory extract done"
+2026-09-09 16:02:23.085  INFO    biz.chat [memory_extract_sync·ok] taskName=Task-68 duration_ms=17301.44 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "memory extract (sync) ok"
+2026-09-09 16:02:27.761  INFO    llm.client [llm_chat·ok] taskName=Task-68 model=MiniMax-M3 msg_count=2 prompt_tokens=495 completion_tokens=134 total_tokens=629 choices=1 duration_ms=4628.74 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "LLM chat ok"
+2026-09-09 16:02:27.762  WARNING character.belief_extractor [character.belief_extract·failed] taskName=Task-68 user_id=54 role_id=48 error_type=JSONDecodeError error_msg=Expecting value: line 1 column 1 (char 0) error_module=json.decoder error_class=json.decoder.JSONDecodeError session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "extract_beliefs_from_conversation failed"
+2026-09-09 16:02:27.762  INFO    app.agent_runner [-·end] taskName=Task-68 ok=True stream=False reply_len=115 reply_preview=你好呀！我是Echo，很高兴见到你 😊  随便聊聊也挺好的，没有固定主题反而更放松。你可以跟我说说最近怎么样？或者有什么想聊的话题——比如最近的天气、看过的电影、遇到的有趣的事，甚至是什么烦心事都可以～  我在这儿呢，你想聊什么？ events=42 chat_latency_ms=28656 duration_ms=28656.6 user_id=54 session_id=ocean-test-1788940915467 request_id=915ea52198254042801a5875a236f64c  "/chat done"
+INFO:     127.0.0.1:59955 - "POST /chat HTTP/1.1" 200 OK
+2026-09-09 16:03:45.462  INFO    app.agent_runner  taskName=Task-101 stream=False msg_len=7 msg_preview=你好,你是谁? user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "/chat received"
+2026-09-09 16:03:45.462  INFO    biz.chat [chat_stream·start] taskName=Task-101 msg_len=7 msg_preview=你好,你是谁? react_max_iter=8 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "chat_stream start"
+2026-09-09 16:03:46.181  WARNING llm.client [small_chat·error] taskName=Task-101 model=MiniMax-M3 msg_count=2 max_tokens=120 temperature=0.1 has_tools=False duration_ms=718.56 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "small LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045df63e15aa3c4a7d15a01e4ef11'}--- end ---
+2026-09-09 16:03:46.240  INFO    llm.intent [intent_classify·fallback] taskName=Task-101 reason=empty_response duration_ms=777.75 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "intent fallback"
+2026-09-09 16:03:46.240  INFO    biz.chat [chat_stream·react_decision] taskName=Task-101 intent=chat intent_source=fallback_empty_response intent_ms=777.75 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "react decision"
+2026-09-09 16:03:46.241  INFO    biz.chat [context_build·start] taskName=Task-101 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "building chat context"
+2026-09-09 16:03:46.241  INFO    memory.retriever [build_chat_context·start] taskName=Task-101 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "build_chat_context begin"
+2026-09-09 16:03:46.298  INFO    memory.retriever [memory_l0·ok] taskName=Task-103 user_id=54 count=0 limit=20 duration_ms=57.11 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "load_l0_memories ok"
+2026-09-09 16:03:46.307  INFO    memory.retriever [persona·fallback_default] taskName=Task-102 user_id=54 duration_ms=65.84 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "load_persona fallback"
+2026-09-09 16:03:46.368  INFO    memory.retriever [memory_l1·ok] taskName=Task-104 user_id=54 count=0 l2_count=0 l1_count=0 parent_ids_brought_in=0 limit=8 duration_ms=126.77 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "load_l1_summaries ok"
+2026-09-09 16:03:46.368  INFO    memory.retriever [build_chat_context·end] taskName=Task-101 ok=True duration_ms=127.86 enable_multimodal=False l1_hit_count=0 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "build_chat_context ok"
+2026-09-09 16:03:46.369  INFO    biz.chat [context_build·end] taskName=Task-101 ok=True duration_ms=128.04 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=0 intent=chat user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "context_build ok"
+2026-09-09 16:03:46.894  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-101 intent=chat intent_source=fallback_empty_response seed_len=2 system_len=676 injected_l1_hint=False injected_tool_hint=False user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "react seed ready"
+2026-09-09 16:03:47.011  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=116.3 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "BGE-M3 embed ok"
+2026-09-09 16:03:47.193  INFO    biz.recall_search [recall_search·ok] taskName=Task-101 user_id=54 role_id=49 top_k=5 hits=0 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "recall search ok"
+2026-09-09 16:03:47.613  WARNING llm.client [small_chat·error] taskName=Task-101 model=MiniMax-M3 msg_count=3 max_tokens=1024 temperature=0.3 has_tools=False duration_ms=419.51 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "small LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e0fd37bc9c724c37b57e276eb6'}--- end ---
+2026-09-09 16:03:47.618  WARNING biz.chat [react_decision·error] taskName=Task-101 iter=0 msg_count=2 duration_ms=423.74 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "react decision failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat.py", line 384, in _resolve_tools
+    resp = await client.small_chat(decision_messages, max_tokens=1024, temperature=0.3)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e0fd37bc9c724c37b57e276eb6'}--- end ---
+2026-09-09 16:03:47.622  INFO    biz.chat [react_decision·empty] taskName=Task-101 iter=0 out_len=0 has_think=False duration_ms=428.48 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "react decision empty"
+2026-09-09 16:03:47.622  INFO    biz.chat [react_loop·no_tool] taskName=Task-101 iter=0 out_len=0 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "react no tool call (hand off to reply generation)"
+2026-09-09 16:03:47.623  INFO    biz.chat [react_loop·end] taskName=Task-101 tools_called=0 exhausted=False user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "react loop end"
+2026-09-09 16:03:47.913  WARNING llm.client [small_stream·error] taskName=Task-101 model=MiniMax-M3 msg_count=2 temperature=0.5 max_tokens=1024 delta_count=0 duration_ms=290.67 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "small_stream failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 396, in small_stream
+    stream = await self._small_client.chat.completions.create(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e106c5324036e43dab41202a05'}--- end ---
+2026-09-09 16:03:47.917  INFO    llm.client [small_stream·end] taskName=Task-101 model=MiniMax-M3 delta_count=0 out_chars=0 duration_ms=293.9 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "small_stream end"
+2026-09-09 16:03:47.917  INFO    biz.chat [chat_stream·reply_streamed] taskName=Task-101 model=MiniMax-M3 raw_len=0 reply_len=0 duration_ms=294.03 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "chat reply streamed"
+2026-09-09 16:03:47.917  INFO    biz.chat [chat_stream·end] taskName=Task-101 final_len=0 tool_count=0 context_build_ms=1676.23 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "chat_stream end"
+2026-09-09 16:03:48.485  WARNING database.mysql [db·slow] taskName=Task-101 op=fetch_all sql=SELECT role, content, created_at FROM chat_messages WHERE user_id=%s AND role_id=%s AND role IN ('user', 'assistant') ORDER BY created_at DESC, id DESC LIMIT %s params=3 rows=0 attempt=1 duration_ms=224.14 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "slow sql"
+2026-09-09 16:03:48.486  INFO    app.agent_runner [-·end] taskName=Task-101 ok=True stream=False reply_len=0 events=4 chat_latency_ms=3023 duration_ms=3023.5 user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "/chat done"
+INFO:     127.0.0.1:58124 - "POST /chat HTTP/1.1" 200 OK
+2026-09-09 16:03:48.489  WARNING remote.role_core_client [role_core_client·http_error] taskName=Task-117 status=401 path=/api/role-core/mood/event user_id=54 session_id=ocean-cmp-1788941025459-i35h3w request_id=9d993308c00343479d44b609b3176c10  "role_core_client POST /api/role-core/mood/event failed: status=401 body={"code":401,"message":"internal token mismatch"}"
+2026-09-09 16:03:49.503  INFO    app.agent_runner  taskName=Task-124 stream=False msg_len=7 msg_preview=你好,你是谁? user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "/chat received"
+2026-09-09 16:03:49.503  INFO    biz.chat [chat_stream·start] taskName=Task-124 msg_len=7 msg_preview=你好,你是谁? react_max_iter=8 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "chat_stream start"
+2026-09-09 16:03:49.698  WARNING llm.client [small_chat·error] taskName=Task-124 model=MiniMax-M3 msg_count=2 max_tokens=120 temperature=0.1 has_tools=False duration_ms=194.22 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "small LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e3c723e1b447ce4f5f155bfb6e'}--- end ---
+2026-09-09 16:03:49.701  INFO    llm.intent [intent_classify·fallback] taskName=Task-124 reason=empty_response duration_ms=197.78 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "intent fallback"
+2026-09-09 16:03:49.701  INFO    biz.chat [chat_stream·react_decision] taskName=Task-124 intent=chat intent_source=fallback_empty_response intent_ms=197.78 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "react decision"
+2026-09-09 16:03:49.702  INFO    biz.chat [context_build·start] taskName=Task-124 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "building chat context"
+2026-09-09 16:03:49.702  INFO    memory.retriever [build_chat_context·start] taskName=Task-124 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "build_chat_context begin"
+2026-09-09 16:03:49.761  INFO    memory.retriever [memory_l0·ok] taskName=Task-126 user_id=54 count=0 limit=20 duration_ms=59.61 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "load_l0_memories ok"
+2026-09-09 16:03:49.762  INFO    memory.retriever [persona·fallback_default] taskName=Task-125 user_id=54 duration_ms=60.07 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "load_persona fallback"
+2026-09-09 16:03:49.847  INFO    memory.retriever [memory_l1·ok] taskName=Task-127 user_id=54 count=0 l2_count=0 l1_count=0 parent_ids_brought_in=0 limit=8 duration_ms=144.75 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "load_l1_summaries ok"
+2026-09-09 16:03:49.847  INFO    memory.retriever [build_chat_context·end] taskName=Task-124 ok=True duration_ms=145.38 enable_multimodal=False l1_hit_count=0 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "build_chat_context ok"
+2026-09-09 16:03:49.847  INFO    biz.chat [context_build·end] taskName=Task-124 ok=True duration_ms=145.54 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=0 intent=chat user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "context_build ok"
+2026-09-09 16:03:50.183  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-124 intent=chat intent_source=fallback_empty_response seed_len=2 system_len=676 injected_l1_hint=False injected_tool_hint=False user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "react seed ready"
+2026-09-09 16:03:50.300  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=116.14 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "BGE-M3 embed ok"
+2026-09-09 16:03:50.378  INFO    biz.recall_search [recall_search·ok] taskName=Task-124 user_id=54 role_id=49 top_k=5 hits=0 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "recall search ok"
+2026-09-09 16:03:50.547  WARNING llm.client [small_chat·error] taskName=Task-124 model=MiniMax-M3 msg_count=3 max_tokens=1024 temperature=0.3 has_tools=False duration_ms=169.03 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "small LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e3a2c2907a42d22eeb4821a6d7'}--- end ---
+2026-09-09 16:03:50.550  WARNING biz.chat [react_decision·error] taskName=Task-124 iter=0 msg_count=2 duration_ms=172.11 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "react decision failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat.py", line 384, in _resolve_tools
+    resp = await client.small_chat(decision_messages, max_tokens=1024, temperature=0.3)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e3a2c2907a42d22eeb4821a6d7'}--- end ---
+2026-09-09 16:03:50.553  INFO    biz.chat [react_decision·empty] taskName=Task-124 iter=0 out_len=0 has_think=False duration_ms=174.97 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "react decision empty"
+2026-09-09 16:03:50.553  INFO    biz.chat [react_loop·no_tool] taskName=Task-124 iter=0 out_len=0 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "react no tool call (hand off to reply generation)"
+2026-09-09 16:03:50.553  INFO    biz.chat [react_loop·end] taskName=Task-124 tools_called=0 exhausted=False user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "react loop end"
+2026-09-09 16:03:50.921  WARNING llm.client [small_stream·error] taskName=Task-124 model=MiniMax-M3 msg_count=2 temperature=0.5 max_tokens=1024 delta_count=0 duration_ms=367.4 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "small_stream failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 396, in small_stream
+    stream = await self._small_client.chat.completions.create(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e4cfef6389b31fc0a1d065d472'}--- end ---
+2026-09-09 16:03:50.925  INFO    llm.client [small_stream·end] taskName=Task-124 model=MiniMax-M3 delta_count=0 out_chars=0 duration_ms=371.56 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "small_stream end"
+2026-09-09 16:03:50.925  INFO    biz.chat [chat_stream·reply_streamed] taskName=Task-124 model=MiniMax-M3 raw_len=0 reply_len=0 duration_ms=371.75 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "chat reply streamed"
+2026-09-09 16:03:50.925  INFO    biz.chat [chat_stream·end] taskName=Task-124 final_len=0 tool_count=0 context_build_ms=1223.88 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "chat_stream end"
+2026-09-09 16:03:51.542  WARNING remote.role_core_client [role_core_client·http_error] taskName=Task-139 status=401 path=/api/role-core/mood/event user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "role_core_client POST /api/role-core/mood/event failed: status=401 body={"code":401,"message":"internal token mismatch"}"
+2026-09-09 16:03:51.596  WARNING database.mysql [db·slow] taskName=Task-124 op=fetch_all sql=SELECT role, content, created_at FROM chat_messages WHERE user_id=%s AND role_id=%s AND role IN ('user', 'assistant') ORDER BY created_at DESC, id DESC LIMIT %s params=3 rows=2 attempt=1 duration_ms=295.87 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "slow sql"
+2026-09-09 16:03:52.245  ERROR   llm.client [llm_chat·error] taskName=Task-124 model=MiniMax-M3 msg_count=2 max_tokens=600 temperature=0.3 has_tools=False duration_ms=649.49 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 71, in chat
+    resp = await self._client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e5be1f210a6a9f80a495184d91'}--- end ---
+2026-09-09 16:03:52.249  WARNING character.belief_extractor [character.belief_extract·failed] taskName=Task-124 user_id=54 role_id=49 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "extract_beliefs_from_conversation failed"
+2026-09-09 16:03:52.249  INFO    app.agent_runner [-·end] taskName=Task-124 ok=True stream=False reply_len=0 events=3 chat_latency_ms=2745 duration_ms=2745.54 user_id=54 session_id=ocean-cmp-1788941029501-aildwz request_id=8399dd6beaa2472fbb41caa199077a8e  "/chat done"
+INFO:     127.0.0.1:58124 - "POST /chat HTTP/1.1" 200 OK
+2026-09-09 16:03:53.303  INFO    app.agent_runner  taskName=Task-146 stream=False msg_len=7 msg_preview=你好,你是谁? user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "/chat received"
+2026-09-09 16:03:53.304  INFO    biz.chat [chat_stream·start] taskName=Task-146 msg_len=7 msg_preview=你好,你是谁? react_max_iter=8 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "chat_stream start"
+2026-09-09 16:03:53.496  WARNING llm.client [small_chat·error] taskName=Task-146 model=MiniMax-M3 msg_count=2 max_tokens=120 temperature=0.1 has_tools=False duration_ms=192.31 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "small LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e6851e8fef0931079e9aaf3dbc'}--- end ---
+2026-09-09 16:03:53.501  INFO    llm.intent [intent_classify·fallback] taskName=Task-146 reason=empty_response duration_ms=196.98 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "intent fallback"
+2026-09-09 16:03:53.501  INFO    biz.chat [chat_stream·react_decision] taskName=Task-146 intent=chat intent_source=fallback_empty_response intent_ms=196.98 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "react decision"
+2026-09-09 16:03:53.501  INFO    biz.chat [context_build·start] taskName=Task-146 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "building chat context"
+2026-09-09 16:03:53.501  INFO    memory.retriever [build_chat_context·start] taskName=Task-146 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "build_chat_context begin"
+2026-09-09 16:03:53.574  INFO    memory.retriever [memory_l0·ok] taskName=Task-148 user_id=54 count=0 limit=20 duration_ms=72.04 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "load_l0_memories ok"
+2026-09-09 16:03:53.574  INFO    memory.retriever [persona·fallback_default] taskName=Task-147 user_id=54 duration_ms=72.65 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "load_persona fallback"
+2026-09-09 16:03:53.635  INFO    memory.retriever [memory_l1·ok] taskName=Task-149 user_id=54 count=0 l2_count=0 l1_count=0 parent_ids_brought_in=0 limit=8 duration_ms=133.83 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "load_l1_summaries ok"
+2026-09-09 16:03:53.636  INFO    memory.retriever [build_chat_context·end] taskName=Task-146 ok=True duration_ms=134.58 enable_multimodal=False l1_hit_count=0 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "build_chat_context ok"
+2026-09-09 16:03:53.636  INFO    biz.chat [context_build·end] taskName=Task-146 ok=True duration_ms=134.8 persona_len=106 l0_count=0 l1_summary_count=0 l1_hit_count=0 intent=chat user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "context_build ok"
+2026-09-09 16:03:53.916  INFO    biz.chat [chat_stream·seed_ready] taskName=Task-146 intent=chat intent_source=fallback_empty_response seed_len=2 system_len=676 injected_l1_hint=False injected_tool_hint=False user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "react seed ready"
+2026-09-09 16:03:54.026  INFO    embedding.bge_m3 [bge_embed·ok] count=1 batch_size=8 fallback=False dim=1024 duration_ms=109.14 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "BGE-M3 embed ok"
+2026-09-09 16:03:54.093  INFO    biz.recall_search [recall_search·ok] taskName=Task-146 user_id=54 role_id=49 top_k=5 hits=0 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "recall search ok"
+2026-09-09 16:03:54.471  WARNING llm.client [small_chat·error] taskName=Task-146 model=MiniMax-M3 msg_count=3 max_tokens=1024 temperature=0.3 has_tools=False duration_ms=377.85 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "small LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e76c6e715375a5273727acea85'}--- end ---
+2026-09-09 16:03:54.474  WARNING biz.chat [react_decision·error] taskName=Task-146 iter=0 msg_count=2 duration_ms=380.9 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "react decision failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat.py", line 384, in _resolve_tools
+    resp = await client.small_chat(decision_messages, max_tokens=1024, temperature=0.3)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 274, in small_chat
+    resp = await self._small_client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e76c6e715375a5273727acea85'}--- end ---
+2026-09-09 16:03:54.479  INFO    biz.chat [react_decision·empty] taskName=Task-146 iter=0 out_len=0 has_think=False duration_ms=385.78 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "react decision empty"
+2026-09-09 16:03:54.479  INFO    biz.chat [react_loop·no_tool] taskName=Task-146 iter=0 out_len=0 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "react no tool call (hand off to reply generation)"
+2026-09-09 16:03:54.479  INFO    biz.chat [react_loop·end] taskName=Task-146 tools_called=0 exhausted=False user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "react loop end"
+2026-09-09 16:03:54.633  WARNING llm.client [small_stream·error] taskName=Task-146 model=MiniMax-M3 msg_count=2 temperature=0.5 max_tokens=1024 delta_count=0 duration_ms=154.31 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "small_stream failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 396, in small_stream
+    stream = await self._small_client.chat.completions.create(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e88d3ad71cbb2c4f2ae48b0a5a'}--- end ---
+2026-09-09 16:03:54.636  INFO    llm.client [small_stream·end] taskName=Task-146 model=MiniMax-M3 delta_count=0 out_chars=0 duration_ms=157.49 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "small_stream end"
+2026-09-09 16:03:54.637  INFO    biz.chat [chat_stream·reply_streamed] taskName=Task-146 model=MiniMax-M3 raw_len=0 reply_len=0 duration_ms=157.64 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "chat reply streamed"
+2026-09-09 16:03:54.637  INFO    biz.chat [chat_stream·end] taskName=Task-146 final_len=0 tool_count=0 context_build_ms=1135.65 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "chat_stream end"
+2026-09-09 16:03:55.323  WARNING database.mysql [db·slow] taskName=Task-146 op=fetch_all sql=SELECT role, content, created_at FROM chat_messages WHERE user_id=%s AND role_id=%s AND role IN ('user', 'assistant') ORDER BY created_at DESC, id DESC LIMIT %s params=3 rows=4 attempt=1 duration_ms=281.15 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "slow sql"
+2026-09-09 16:03:55.328  WARNING remote.role_core_client [role_core_client·http_error] taskName=Task-161 status=401 path=/api/role-core/mood/event user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "role_core_client POST /api/role-core/mood/event failed: status=401 body={"code":401,"message":"internal token mismatch"}"
+2026-09-09 16:03:55.509  ERROR   llm.client [llm_chat·error] taskName=Task-146 model=MiniMax-M3 msg_count=2 max_tokens=600 temperature=0.3 has_tools=False duration_ms=185.67 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "LLM chat failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\llm\client.py", line 71, in chat
+    resp = await self._client.chat.completions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2739, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<53 lines>...
+    )
+    ^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.APIStatusError: Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 'request_id': '06f045e8ac8226ffbf7087d1dd0d1729'}--- end ---
+2026-09-09 16:03:55.515  WARNING character.belief_extractor [character.belief_extract·failed] taskName=Task-146 user_id=54 role_id=49 error_type=APIStatusError error_msg=Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': '当前已达到 Token Plan 用量上限。为避免调用中断，请升级 Token Plan 套餐，或购买积分补充用量并开启积分自动消耗。 (2067)', 'http_code': '402'}, 're... error_module=openai error_class=openai.APIStatusError session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "extract_beliefs_from_conversation failed"
+2026-09-09 16:03:55.515  INFO    app.agent_runner [-·end] taskName=Task-146 ok=True stream=False reply_len=0 events=3 chat_latency_ms=2211 duration_ms=2211.49 user_id=54 session_id=ocean-cmp-1788941033302-louo20 request_id=6211a85331604671a27b57afbf599113  "/chat done"
+INFO:     127.0.0.1:58124 - "POST /chat HTTP/1.1" 200 OK
+2026-09-09 21:57:16.722  ERROR   database.mysql [db·error] taskName=Task-5 op=execute sql=UPDATE chat_sessions SET retain_score = retain_score * POW(0.5, (TIMESTAMPDIFF(MINUTE, last_msg_at, NOW()) / 1440.0) / %s) WHERE archived = 0 params=1 attempt=1 duration_ms=4.83 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "db execute failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-09 21:57:16.800  WARNING biz.chat_memory [chat_memory_gc·decay_error] taskName=Task-5 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "decay failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat_memory.py", line 157, in decay_retain_scores
+    await execute(sql, (half_life_days,))
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 312, in execute
+    return await _run_with_retry("execute", sql, params, _run)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-09 21:57:16.807  ERROR   database.mysql [db·error] taskName=Task-5 op=execute sql=DELETE FROM chat_sessions WHERE last_msg_at < (NOW() - INTERVAL %s DAY) AND retain_score < 0.05 params=1 attempt=1 duration_ms=0.59 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "db execute failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-09 21:57:16.812  WARNING biz.chat_memory [chat_memory_gc·age_error] taskName=Task-5 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "gc age delete failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat_memory.py", line 125, in gc_forgotten_sessions
+    await execute(sql_age, (max_age_days,))
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 312, in execute
+    return await _run_with_retry("execute", sql, params, _run)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-09 21:57:16.817  ERROR   database.mysql [db·error] taskName=Task-5 op=execute sql=UPDATE chat_sessions SET archived = 1, retain_score = 0.0 WHERE id IN ( SELECT id FROM ( SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id, role_id ORDER BY retain_score DESC, last_msg_at DESC) AS... params=1 attempt=1 duration_ms=0.41 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "db execute failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-09 21:57:16.821  WARNING biz.chat_memory [chat_memory_gc·trim_error] taskName=Task-5 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "gc trim failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat_memory.py", line 140, in gc_forgotten_sessions
+    await execute(sql_trim, (max_keep_per_user,))
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 312, in execute
+    return await _run_with_retry("execute", sql, params, _run)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-09 21:57:16.827  INFO    biz.chat_memory [chat_memory_gc·ok] taskName=Task-5 touched_tables=0  "chat_memory gc done"
+2026-09-10 03:57:16.840  ERROR   database.mysql [db·error] taskName=Task-5 op=execute sql=UPDATE chat_sessions SET retain_score = retain_score * POW(0.5, (TIMESTAMPDIFF(MINUTE, last_msg_at, NOW()) / 1440.0) / %s) WHERE archived = 0 params=1 attempt=1 duration_ms=0.99 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "db execute failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-10 03:57:16.845  WARNING biz.chat_memory [chat_memory_gc·decay_error] taskName=Task-5 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "decay failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat_memory.py", line 157, in decay_retain_scores
+    await execute(sql, (half_life_days,))
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 312, in execute
+    return await _run_with_retry("execute", sql, params, _run)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-10 03:57:16.850  ERROR   database.mysql [db·error] taskName=Task-5 op=execute sql=DELETE FROM chat_sessions WHERE last_msg_at < (NOW() - INTERVAL %s DAY) AND retain_score < 0.05 params=1 attempt=1 duration_ms=0.35 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "db execute failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-10 03:57:16.855  WARNING biz.chat_memory [chat_memory_gc·age_error] taskName=Task-5 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "gc age delete failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat_memory.py", line 125, in gc_forgotten_sessions
+    await execute(sql_age, (max_age_days,))
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 312, in execute
+    return await _run_with_retry("execute", sql, params, _run)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-10 03:57:16.860  ERROR   database.mysql [db·error] taskName=Task-5 op=execute sql=UPDATE chat_sessions SET archived = 1, retain_score = 0.0 WHERE id IN ( SELECT id FROM ( SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id, role_id ORDER BY retain_score DESC, last_msg_at DESC) AS... params=1 attempt=1 duration_ms=0.29 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "db execute failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-10 03:57:16.864  WARNING biz.chat_memory [chat_memory_gc·trim_error] taskName=Task-5 error_type=OperationalError error_msg=(2003, "Can't connect to MySQL server on '8.130.81.41'") error_module=pymysql.err error_class=pymysql.err.OperationalError  "gc trim failed"
+--- traceback ---
+Traceback (most recent call last):
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 527, in _connect
+    self._reader, self._writer = await \
+                                 ^^^^^^^
+    ...<4 lines>...
+            timeout=self.connect_timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\tasks.py", line 507, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 87, in _open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1160, in create_connection
+    raise exceptions[0]
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1135, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\base_events.py", line 1038, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "E:\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "E:\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+OSError: [WinError 1232] 不能访问网络位置。有关网络排除故障的信息，请参阅 Windows 帮助。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Python\workspace\echo-ai\biz\chat_memory.py", line 140, in gc_forgotten_sessions
+    await execute(sql_trim, (max_keep_per_user,))
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 312, in execute
+    return await _run_with_retry("execute", sql, params, _run)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 242, in _run_with_retry
+    result, rows = await runner()
+                   ^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 298, in _run
+    async with acquire() as conn:
+               ~~~~~~~^^
+  File "E:\Python\Python313\Lib\contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\workspace\echo-ai\database\mysql.py", line 164, in acquire
+    conn = await pool.acquire()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 142, in _acquire
+    await self._fill_free_pool(True)
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\pool.py", line 182, in _fill_free_pool
+    conn = await connect(echo=self._echo, loop=self._loop,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         **self._conn_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 74, in _connect
+    await conn._connect()
+  File "E:\Python\Python313\Lib\site-packages\aiomysql\connection.py", line 563, in _connect
+    raise OperationalError(
+    ...<2 lines>...
+    ) from e
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '8.130.81.41'")--- end ---
+2026-09-10 03:57:16.868  INFO    biz.chat_memory [chat_memory_gc·ok] taskName=Task-5 touched_tables=0  "chat_memory gc done"
