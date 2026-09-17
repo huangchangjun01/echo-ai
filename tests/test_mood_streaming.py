@@ -162,7 +162,7 @@ async def test_mood_update_emitted_during_stream(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="我好开心好喜欢好幸福",
         role_id="default",
@@ -218,7 +218,7 @@ async def test_emotion_change_emitted_when_label_changes(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="我好开心好喜欢好幸福",
         role_id="default",
@@ -254,6 +254,11 @@ async def test_mood_threshold_lowered_to_005(monkeypatch):
     选择 "你好呀"（detect_emotion_fallback 拿到 valence≈0.2, intensity=0.3）；
     新阈值 0.05 下首次采样的 |delta|≈0.06 应触发 mood_update。
     若阈值仍为 0.15，则不会触发（0.06 < 0.15）——本测试会失败。
+
+    注意:本测试依赖 ``character.mood.detect_emotion_fallback`` 的关键词权重。
+    "你好呀" 不在正/负向词表里 → valence=0, 但"好"字在正向词表里命中 1 次(+0.2)。
+    改 detect_emotion_fallback 的 keyword 列表后,此处 valence 与阈值裕度都会变,
+    评估「0.06 触发」是否仍成立需要重算——别忘记同步调整本测试。
     """
     # ≥20 chunks 触发 process 采样
     chunks = _chunked("字" * 25, piece_size=1)
@@ -264,7 +269,7 @@ async def test_mood_threshold_lowered_to_005(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="你好呀",  # valence≈0.2 → |delta|≈0.06，新阈值下应触发
         role_id="default",

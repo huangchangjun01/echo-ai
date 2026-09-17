@@ -184,7 +184,7 @@ async def test_stage_events_chat_path_no_tools(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",
@@ -236,7 +236,7 @@ async def test_stage_events_have_ts_ms(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",
@@ -259,7 +259,7 @@ async def test_stage_events_pairs_balanced(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",
@@ -296,7 +296,7 @@ async def test_tool_dispatch_stage_events_when_llm_calls_tool(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",
@@ -357,7 +357,7 @@ async def test_recall_search_end_yields_even_when_search_raises(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",
@@ -398,7 +398,7 @@ async def test_tool_dispatch_end_yields_even_when_tool_raises(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",
@@ -490,7 +490,7 @@ async def test_llm_error_yields_error_frame(monkeypatch):
 
     events: list[dict[str, Any]] = []
     async for ev in chat_stream(
-        user_id="u1",
+        user_id="1",
         session_id="s1",
         user_msg="hello",
         role_id="default",

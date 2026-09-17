@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 
 from config.config import get_settings
 from config.prompts import build_system_prompt, TOOL_DESCRIPTIONS
+from character.mood import MoodSnapshot, compute_mood_snapshot as _compute_mood_snapshot
 from character.prompts_inject import build_segments
 from llm.client import get_llm_client, parse_tool_call
 from llm.intent import Intent, classify_intent
@@ -109,11 +110,13 @@ async def _load_mood_sample_inputs(
         pass
 
     # relationship intimacy → relationship_influence（intimacy * 0.05）
+    # 关键：必须用 AsyncClient，不能用 sync Client；sync Client 在 async 路径
+    # 里会阻塞事件循环最多 2.0s（echo-core 不可达时），影响 TTFT。
     try:
         import httpx
 
-        with httpx.Client(timeout=2.0) as _c:
-            _resp = _c.get(
+        async with httpx.AsyncClient(timeout=2.0) as _c:
+            _resp = await _c.get(
                 f"{os.getenv('ECHO_CORE_BASE_URL', 'http://localhost:8080')}/api/role-core/relationship",
                 params={"roleId": role_id},
                 headers={"X-Session-Id": "", "X-User-Id": user_id},
@@ -150,7 +153,7 @@ async def _load_mood_sample_inputs(
 
 
 def _mood_update_dict(new_snap: MoodSnapshot, expression: str, valence: float) -> dict[str, Any]:
-    """构造 mood_update 事件的 payload（spec §3.2 7 字段契约）。"""
+    """构造 mood_update 事件的 payload（spec §3.2 8 字段（type + 7 业务字段）契约）。"""
     return {
         "type": "mood_update",
         "instantVal": new_snap.instant_val,
@@ -173,6 +176,47 @@ def _emotion_change_dict(
         "to": to_emotion,
         "intensity": intensity,
     }
+
+
+def _build_mood_events(
+    last_snap: MoodSnapshot, last_emotion: str, inputs: _MoodSampleInputs
+) -> tuple[MoodSnapshot, str, list[dict[str, Any]]]:
+    """计算下一拍 mood 快照,并按 spec §4.3 阈值收集要 yield 的事件。
+
+    纯函数式 helper:不直接 yield,而是把"应 yield 的事件列表"返回给调用方,
+    让 async generator (chat_stream) 自行决定 yield 时机。这样 during-stream 与
+    post-done 路径能共用同一份「compute → 阈值检查 → emit」逻辑,避免重复。
+
+    阈值规则(spec §4.3):``|new.instant_val - last.instant_val| > MOOD_DELTA_THRESHOLD``
+    才下发 mood_update;若 emotion 标签同时变化则再下发 emotion_change。
+
+    Returns:
+        ``(new_snap, new_emotion, events)``:
+        - ``new_snap``: 算得的下一拍 MoodSnapshot(供调用方滚动覆盖 last_snap);
+        - ``new_emotion``: 新的 emotion 标签(供调用方滚动覆盖 last_emotion);
+        - ``events``: 应 yield 的事件列表(可能为空,表示 |delta| 没超阈值无需下发)。
+    """
+    new_snap, expression = _compute_mood_snapshot(
+        last_snap,
+        valence=inputs.valence,
+        intensity=inputs.intensity,
+        personality_bias=inputs.personality_bias,
+        relationship_influence=inputs.relationship_influence,
+        baseline_val=inputs.baseline_val,
+        short_val=inputs.short_val,
+    )
+    events: list[dict[str, Any]] = []
+    if abs(new_snap.instant_val - last_snap.instant_val) > MOOD_DELTA_THRESHOLD:
+        events.append(_mood_update_dict(new_snap, expression, inputs.valence))
+        if new_snap.instant_emotion != last_emotion:
+            events.append(
+                _emotion_change_dict(
+                    from_emotion=last_emotion,
+                    to_emotion=new_snap.instant_emotion,
+                    intensity=new_snap.instant_intensity,
+                )
+            )
+    return new_snap, new_snap.instant_emotion, events
 
 
 def _stage(name: str, state: str, **extra: Any) -> dict[str, Any]:
@@ -1042,9 +1086,12 @@ async def chat_stream(
     yield _stage(StageName.MODEL_REASONING, StageState.START)
     stream_error: str | None = None
     # 过程性 mood 滚动状态（spec §4.3）：每 MOOD_SAMPLE_INTERVAL 个 chunk 采样一次
-    from character.mood import MoodSnapshot, compute_mood_snapshot as _compute_mood_snapshot
-
-    last_mood_snap = MoodSnapshot()
+    # 初始 snapshot 从 mood_inputs.baseline_val/short_val 装载(DB 中的真实短长桶),
+    # 避免首次过程性采样把用户已存在的 short/baseline 当作 0.0 污染 instant 公式。
+    last_mood_snap = MoodSnapshot(
+        baseline_val=mood_inputs.baseline_val,
+        short_val=mood_inputs.short_val,
+    )
     last_emotion = "neutral"
     delta_count = 0
     async for content, reasoning, err in reply_client.small_stream(
@@ -1076,23 +1123,14 @@ async def chat_stream(
         # 同一 chat 调用内 mood_inputs 不变,所以只有「首次采样」和「post-done 末次采样」
         # 会真正触发;后续 sample 因 new == last 不下发（避免噪声刷屏）。
         if delta_count % MOOD_SAMPLE_INTERVAL == 0:
-            new_snap, expression = _compute_mood_snapshot(
-                last_mood_snap,
-                valence=mood_inputs.valence,
-                intensity=mood_inputs.intensity,
-                personality_bias=mood_inputs.personality_bias,
-                relationship_influence=mood_inputs.relationship_influence,
+            new_snap, new_emotion, events = _build_mood_events(
+                last_mood_snap, last_emotion, mood_inputs
             )
-            if abs(new_snap.instant_val - last_mood_snap.instant_val) > MOOD_DELTA_THRESHOLD:
-                yield _mood_update_dict(new_snap, expression, mood_inputs.valence)
-                if new_snap.instant_emotion != last_emotion:
-                    yield _emotion_change_dict(
-                        from_emotion=last_emotion,
-                        to_emotion=new_snap.instant_emotion,
-                        intensity=new_snap.instant_intensity,
-                    )
-                    last_emotion = new_snap.instant_emotion
+            for ev in events:
+                yield ev
+            if events:
                 last_mood_snap = new_snap
+                last_emotion = new_emotion
     # 流结束时清理尚未闭合的 <think> 残余
     cleaned = _strip_think(raw)
     if len(cleaned) > emitted:
@@ -1152,27 +1190,19 @@ async def chat_stream(
         from remote.role_core_client import get_role_core_client
 
         # 1. 末次采样:基于 last_mood_snap(可能已被过程中采样滚动更新过)再算一次。
-        new_snap, expression = _compute_mood_snapshot(
-            last_mood_snap,
-            valence=mood_inputs.valence,
-            intensity=mood_inputs.intensity,
-            personality_bias=mood_inputs.personality_bias,
-            relationship_influence=mood_inputs.relationship_influence,
+        # 共用 _build_mood_events helper:过程中与 post-done 走同一份「阈值检查 + emit」逻辑。
+        new_snap, new_emotion, events = _build_mood_events(
+            last_mood_snap, last_emotion, mood_inputs
         )
-
-        # 2. 仅当 |delta| > 阈值才下发(spec §4.3: 0.15 → 0.05)
-        if abs(new_snap.instant_val - last_mood_snap.instant_val) > MOOD_DELTA_THRESHOLD:
-            yield _mood_update_dict(new_snap, expression, mood_inputs.valence)
-            if new_snap.instant_emotion != last_emotion:
-                yield _emotion_change_dict(
-                    from_emotion=last_emotion,
-                    to_emotion=new_snap.instant_emotion,
-                    intensity=new_snap.instant_intensity,
-                )
-                last_emotion = new_snap.instant_emotion
+        for ev in events:
+            yield ev
+        if events:
             last_mood_snap = new_snap
+            last_emotion = new_emotion
 
-        # 3. 异步持久化到 echo-core(不阻塞 SSE 流)
+        # 2. 异步持久化到 echo-core(不阻塞 SSE 流)
+        # 注:即便 _build_mood_events 没返回任何事件(|delta| 未超阈值),
+        # 末次 instant_emotion 仍用于持久化,保证 echo-core 收到一次最终 emotion。
         async def _persist_mood() -> None:
             try:
                 client = get_role_core_client()

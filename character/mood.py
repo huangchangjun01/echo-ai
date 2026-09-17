@@ -203,14 +203,16 @@ def compute_mood_snapshot(
     intensity: float,
     personality_bias: float = 0.0,
     relationship_influence: float = 0.0,
+    baseline_val: float | None = None,
+    short_val: float | None = None,
 ) -> tuple[MoodSnapshot, str]:
     """从 previous 快照 + 新事件输入,计算 new instant 桶快照 + 表情。
 
     设计目的(spec §4.3):支持「过程性 mood 下发」——
     chat_stream 流式期间,基于已缓存的输入 (valence/intensity/personality/
     relationship) 重算 new_instant,产出完整 MoodSnapshot 与 expression 标签,
-    供 ``mood_update`` 事件使用。short / baseline 桶沿用 previous,不参与滚动计算
-    (由持久化层在 done 后统一推进)。
+    供 ``mood_update`` 事件使用。short / baseline 桶沿用 previous(或由显式 override
+    覆盖),不参与滚动计算(由持久化层在 done 后统一推进)。
 
     Args:
         previous: 上一时刻的 MoodSnapshot(initial call 时传 ``MoodSnapshot()``)。
@@ -218,10 +220,14 @@ def compute_mood_snapshot(
         intensity: 情感强度 [0, 1];内部 ``max(intensity, 0.3)`` 兜底。
         personality_bias: OCEAN 三维偏置(神经质负向、开放/宜人性正向)。
         relationship_influence: 关系亲密度影响 (``intimacy * 0.05``)。
+        baseline_val: 显式基线 override;当 ``previous.baseline_val == 0`` 时
+            生效,允许外部传入 DB 中的真实基线值,避免「0 baseline」污染 instant 公式。
+        short_val: 显式短期 override;同 ``baseline_val`` 语义。
 
     Returns:
         ``(new_snap, expression)``:
-        - ``new_snap``: instant 桶已重算; short / baseline 沿用 previous;
+        - ``new_snap``: instant 桶已重算; short / baseline 沿用 previous
+          (或 override 后值);
         - ``expression``: ``valence_to_expression(new_instant, new_intensity)``
           映射出的 8 表情标签(smile / happy / excited / ...)。
 
@@ -231,6 +237,19 @@ def compute_mood_snapshot(
           ``new_intensity = max(intensity, previous.instant_intensity)``,
           保证过程性更新不会让强度突然回落。
     """
+    # 当 previous 是「全零初始快照」时(过程性下发的首次采样),允许调用方通过
+    # baseline_val / short_val 显式注入 DB 中的真实值,避免「0 baseline」污染
+    # instant 公式。否则使用 previous 自身值(后续滚动采样场景)。
+    effective_baseline = (
+        baseline_val
+        if (previous.baseline_val == 0 and baseline_val is not None)
+        else previous.baseline_val
+    )
+    effective_short = (
+        short_val
+        if (previous.short_val == 0 and short_val is not None)
+        else previous.short_val
+    )
     event = MoodEvent(
         impact=valence,
         intensity=max(intensity, 0.3),
@@ -240,8 +259,8 @@ def compute_mood_snapshot(
         noise_sigma=0.0,  # 过程性下发需要可重现,不留随机噪声
     )
     new_instant = compute_instant(
-        previous.baseline_val,
-        previous.short_val,
+        effective_baseline,
+        effective_short,
         event,
     )
     new_emotion = classify_emotion(new_instant)
@@ -251,10 +270,10 @@ def compute_mood_snapshot(
         instant_val=new_instant,
         instant_intensity=new_intensity,
         instant_emotion=new_emotion,
-        short_val=previous.short_val,
+        short_val=effective_short,
         short_intensity=previous.short_intensity,
         short_emotion=previous.short_emotion,
-        baseline_val=previous.baseline_val,
+        baseline_val=effective_baseline,
         baseline_intensity=previous.baseline_intensity,
         baseline_emotion=previous.baseline_emotion,
     )
