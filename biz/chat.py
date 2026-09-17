@@ -10,7 +10,7 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, NamedTuple
 
 from config.config import get_settings
 from config.prompts import build_system_prompt, TOOL_DESCRIPTIONS
@@ -31,6 +31,54 @@ logger = logging.getLogger(__name__)
 def _now_ms() -> int:
     """当前 UTC 毫秒时间戳，stage 事件的 ts_ms 字段。"""
     return int(time.time() * 1000)
+
+
+# ---------- 阶段事件契约（SSE v2 §3.3） ----------
+# 阶段名称是 SSE v2 公共契约的一部分（前端按 name 分流渲染），
+# 单点维护便于测试与未来 emotion_change 等新事件复用 `_stage()` 构造器。
+class StageName:
+    """stage 事件 ``name`` 字段的合法取值。SSE v2 §3.3 公共契约。"""
+
+    INTENT = "intent"
+    RECALL_SEARCH = "recall_search"
+    TOOL_DISPATCH = "tool_dispatch"
+    MODEL_REASONING = "model_reasoning"
+    ANSWER = "answer"
+
+
+class StageState:
+    """stage 事件 ``state`` 字段的合法取值。"""
+
+    START = "start"
+    END = "end"
+
+
+def _stage(name: str, state: str, **extra: Any) -> dict[str, Any]:
+    """构造一条 stage 事件。
+
+    基础字段固定为 ``type`` / ``name`` / ``state`` / ``ts_ms``；
+    业务扩展字段（如 tool_dispatch 的 ``iter`` / ``tool``）通过 ``extra`` 传入。
+    """
+    base: dict[str, Any] = {
+        "type": "stage",
+        "name": name,
+        "state": state,
+        "ts_ms": _now_ms(),
+    }
+    base.update(extra)
+    return base
+
+
+class ToolResolution(NamedTuple):
+    """``_resolve_tools`` 的返回值（拆 3-tuple → 2-tuple 命名元组）。
+
+    - ``log``: 每个 ReAct 迭代的工具调用记录
+    - ``turns``: 可追加进「最终生成上下文」的对话轮次
+      （形如 assistant「[calling tool: x]」+ user「工具结果」），让最终生成看到工具产出。
+    """
+
+    log: list[dict[str, Any]]
+    turns: list[dict[str, str]]
 
 
 # ---------- 意图 → 工具偏好提示 ----------
@@ -357,22 +405,24 @@ async def _resolve_tools(
     messages: list[dict[str, str]],
     max_iter: int,
     role_id: str = "default",
-) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[dict[str, Any]]]:
+    *,
+    result_sink: list[ToolResolution] | None = None,
+) -> AsyncIterator[dict[str, Any]]:
     """ReAct 工具解析：逐轮让 LLM 决定是否调用工具并执行，直到 LLM 不再要求工具或迭代耗尽。
 
     **不生成最终自然语言回复**——最终回复由 chat_stream 通过小模型直接流式产出。
 
-    返回 (tool_log, tool_turns, tool_dispatch_events)：
-    - tool_log: 每个 ReAct 迭代的工具调用记录
-    - tool_turns: 可追加进「最终生成上下文」的对话轮次
-      （形如 assistant「[calling tool: x]」+ user「工具结果」），让最终生成看到工具产出。
-    - tool_dispatch_events: 每个实际派发工具的 ReAct 迭代的 start/end stage 事件对
-      （按时间顺序排列，LLM 决定不调工具时跳过该阶段）。由 chat_stream 顺序 yield 给前端。
+    本函数是 async generator：在每次实际派发工具时立即 yield 一对
+    ``tool_dispatch`` stage 事件（start 在 dispatch 前、end 在 success/failure 后），
+    chat_stream 透传给 SSE 消费者，实现「过程中逐步出现」语义，**不**缓冲。
+
+    最终结果 ``ToolResolution(log, turns)`` 通过 ``result_sink`` 列表回传给调用方
+    （Python 3.x 不允许 async generator 的 ``return value``，所以采用 sink 模式）。
+    调用方传入空 list，函数结束后 list[0] 即为最终结果。
     """
     client = get_llm_client()
     tool_log: list[dict[str, Any]] = []
     tool_turns: list[dict[str, str]] = []
-    tool_dispatch_events: list[dict[str, Any]] = []
     exhausted = False
 
     for i in range(max(1, max_iter)):
@@ -452,14 +502,10 @@ async def _resolve_tools(
             ),
         )
         # tool_dispatch 阶段开始（仅当 LLM 决定调用工具时才进入；纯聊天路径不出现）
-        tool_dispatch_events.append({
-            "type": "stage",
-            "name": "tool_dispatch",
-            "state": "start",
-            "iter": i,
-            "tool": name,
-            "ts_ms": _now_ms(),
-        })
+        # 通过 _stage 构造器统一事件 schema，立即 yield 给上游 chat_stream
+        yield _stage(
+            StageName.TOOL_DISPATCH, StageState.START, iter=i, tool=name
+        )
         t1 = time.perf_counter()
         try:
             result = await dispatch_tool(name, **args)
@@ -477,14 +523,9 @@ async def _resolve_tools(
                 duration_ms=tool_ms,
             )
             # 异常路径：仍配对 yield end，确保 start/end 平衡
-            tool_dispatch_events.append({
-                "type": "stage",
-                "name": "tool_dispatch",
-                "state": "end",
-                "iter": i,
-                "tool": name,
-                "ts_ms": _now_ms(),
-            })
+            yield _stage(
+                StageName.TOOL_DISPATCH, StageState.END, iter=i, tool=name
+            )
             break
         tool_ms = round((time.perf_counter() - t1) * 1000, 2)
         logger.info(
@@ -500,14 +541,9 @@ async def _resolve_tools(
             ),
         )
         # tool_dispatch 阶段结束（成功路径）
-        tool_dispatch_events.append({
-            "type": "stage",
-            "name": "tool_dispatch",
-            "state": "end",
-            "iter": i,
-            "tool": name,
-            "ts_ms": _now_ms(),
-        })
+        yield _stage(
+            StageName.TOOL_DISPATCH, StageState.END, iter=i, tool=name
+        )
         tool_log.append({"iter": i, "tool": name, "args": args, "result": result.to_dict()})
 
         # 把工具结果追加进 tool_turns，让 LLM 下一轮决策 + 最终生成都能看到
@@ -526,7 +562,10 @@ async def _resolve_tools(
             exhausted=exhausted,
         ),
     )
-    return tool_log, tool_turns, tool_dispatch_events
+    # 通过 result_sink 回传最终结果给调用方
+    # （Python 3.x async generator 不支持 ``return value``，故采用 sink 模式）
+    if result_sink is not None:
+        result_sink.append(ToolResolution(log=tool_log, turns=tool_turns))
 
 
 # ---------- 公开接口 ----------
@@ -539,12 +578,18 @@ async def chat_stream(
 ) -> AsyncIterator[dict[str, Any]]:
     """流式 chat：预注入 → ReAct → 流式级联输出。
 
-    yield 事件类型：
-    - {"type": "context", "persona": ..., "l0_count": int, "l1_count": int}
-    - {"type": "tool", "name": str, "iter": int, "ok": bool, "summary": str}
-    - {"type": "prefix", "text": str}
-    - {"type": "delta", "text": str}
-    - {"type": "done", "full": str}
+    yield 事件类型（SSE v2 §3.3 公共契约）：
+    - ``stage``：阶段边界，固定字段 ``type/name/state/ts_ms``；
+      tool_dispatch 额外带 ``iter`` + ``tool``。
+      name 取值见 :class:`StageName`（intent / recall_search / tool_dispatch /
+      model_reasoning / answer）；state 取值见 :class:`StageState`（start / end）。
+    - ``context``：预注入上下文摘要（persona / l0_count / l1_count / intent）。
+    - ``resource``：可下载附件（图片/音频/文件 URL），与 stage 事件互不依赖。
+    - ``thinking``：模型推理过程（来自 LLM 的 reasoning_content），带 ``stage="model_reasoning"``。
+    - ``presence``：装饰性即时回应（presence，不进 final_text）。
+    - ``tool``：每次实际工具调用的概要（name / iter / ok / summary）。
+    - ``delta``：流式正文增量。
+    - ``mood_update`` / ``done``：收尾事件。
     """
     # 注：记忆抽取不在此处触发（避免在事件循环里 fire-and-forget 后立刻返回，
     # 导致下一次 /chat 来时记忆尚未落库）。由调用方根据 stream 模式决定 await 或 fire-and-forget。
@@ -563,10 +608,10 @@ async def chat_stream(
     )
 
     # 0) 意图识别：决定是否触发 RAG 跨模态检索 / 是否注入 L1 hint
-    yield {"type": "stage", "name": "intent", "state": "start", "ts_ms": _now_ms()}
+    yield _stage(StageName.INTENT, StageState.START)
     intent_res = await classify_intent(user_msg)
     intent = intent_res.intent
-    yield {"type": "stage", "name": "intent", "state": "end", "ts_ms": _now_ms()}
+    yield _stage(StageName.INTENT, StageState.END)
     logger.info(
         "react decision",
         extra=merge_extra(
@@ -674,7 +719,12 @@ async def chat_stream(
     # 同样的摘要会再注入到 final_messages 给最终回复生成用。
     # 注意：与现有 L0/L1 对话记忆**完全隔离**；回忆记忆永不遗忘，本处只读不写。
     recall_hits: list[dict[str, Any]] = []
-    yield {"type": "stage", "name": "recall_search", "state": "start", "ts_ms": _now_ms()}
+    # 设计选择：recall_search 阶段「无条件下发」——即便意图是 CHAT / 命中为空 /
+    # 检索异常，也照样 yield start/end，保证前端 UI 状态机一致；具体命中注入逻辑
+    # 由后续 recall_hits 是否非空决定。
+    # （spec §4.1 提议的 `if need_l1:` 门控未采纳，因 search_recall_for_chat
+    # 在 chat_stream 入口已无条件调用；统一为一对完整 start/end 边界更直观。）
+    yield _stage(StageName.RECALL_SEARCH, StageState.START)
     try:
         from biz.recall_search import search_recall_for_chat
         recall_hits = await search_recall_for_chat(user_id, role_id, user_msg, top_k=5)
@@ -687,8 +737,10 @@ async def chat_stream(
             stage="chat_stream",
             event="recall_search_error",
         )
-    # recall_search 总是产出（即便 hits 为空、调用失败），保证 start/end 配对
-    yield {"type": "stage", "name": "recall_search", "state": "end", "ts_ms": _now_ms()}
+    finally:
+        # try/finally：无论客户端断连（asyncio.CancelledError）、检索抛错还是
+        # 正常返回，都必须 yield end，否则前端会卡在"recall_search 进行中"。
+        yield _stage(StageName.RECALL_SEARCH, StageState.END)
 
     # 把"含 memoryId 的摘要"和"工具可用性提醒"塞进 ReAct 决策上下文。
     # 这一段是 LLM 是否能正确调 read_memory_full 的关键。
@@ -731,17 +783,23 @@ async def chat_stream(
     tool_log: list[dict[str, Any]] = []
     tool_turns: list[dict[str, str]] = []
     react_messages = list(tool_seed) + recall_seed
-    tool_log, tool_turns, tool_dispatch_events = await _resolve_tools(
+    # _resolve_tools 是 async generator：通过 result_sink + async for 消费——
+    # async for 让 tool_dispatch stage 事件 inline 透传给 SSE 消费者
+    # （实现「过程中逐步出现」），result_sink 在迭代结束后拿到最终 (tool_log, tool_turns)。
+    # Python 3.x async generator 不支持 return value，故采用 sink 模式。
+    result_sink: list[ToolResolution] = []
+    async for ev in _resolve_tools(
         user_id=user_id,
         session_id=session_id,
         messages=react_messages,
         max_iter=settings.react_max_iter,
         role_id=role_id,
-    )
-    # 把每个 ReAct 迭代的 tool_dispatch start/end 帧先 yield 给前端
-    # （无工具调用时 tool_dispatch_events 为空 → 阶段被跳过）
-    for ev in tool_dispatch_events:
+        result_sink=result_sink,
+    ):
         yield ev
+    if result_sink:
+        tool_log = result_sink[0].log
+        tool_turns = result_sink[0].turns
     for entry in tool_log:
         yield {
             "type": "tool",
@@ -845,13 +903,13 @@ async def chat_stream(
     emitted = 0
     t_gen = time.perf_counter()
     # model_reasoning 阶段：小模型流式生成正文（含推理过程 + 实际回答）
-    yield {"type": "stage", "name": "model_reasoning", "state": "start", "ts_ms": _now_ms()}
+    yield _stage(StageName.MODEL_REASONING, StageState.START)
     async for content, reasoning in reply_client.small_stream(
         final_messages,
         max_tokens=llm_cfg.small_max_tokens,
     ):
         if reasoning:
-            yield {"type": "thinking", "stage": "model_reasoning", "text": reasoning}
+            yield {"type": "thinking", "stage": StageName.MODEL_REASONING, "text": reasoning}
         if not content:
             continue
         raw += content
@@ -870,9 +928,9 @@ async def chat_stream(
         piece = cleaned[emitted:]
         final_text += piece
         yield {"type": "delta", "text": _strip_url_schemes(piece)}
-    yield {"type": "stage", "name": "model_reasoning", "state": "end", "ts_ms": _now_ms()}
+    yield _stage(StageName.MODEL_REASONING, StageState.END)
     # answer 阶段：从 model_reasoning.end 到 done（可能包含资源附录 delta）
-    yield {"type": "stage", "name": "answer", "state": "start", "ts_ms": _now_ms()}
+    yield _stage(StageName.ANSWER, StageState.START)
     logger.info(
         "chat reply streamed",
         extra=merge_extra(
@@ -902,7 +960,7 @@ async def chat_stream(
         ),
     )
     # answer 阶段结束：紧贴 done 之前，前端据此切换至"完成"状态
-    yield {"type": "stage", "name": "answer", "state": "end", "ts_ms": _now_ms()}
+    yield _stage(StageName.ANSWER, StageState.END)
     yield {"type": "done", "full": final_text}
 
     # ===== M2 三桶心情实时更新(在 done 前下发,不影响 done 流)=====
