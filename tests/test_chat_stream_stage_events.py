@@ -68,11 +68,16 @@ class _FakeLLMClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
     ):
-        # 空 async generator：不产生任何 chunk，reply 阶段直接走 final_text 清理路径。
-        # ``return`` + 不可达 ``yield`` 把函数标记为 async generator，让上游 ``async for``
-        # 可以正常迭代（否则 small_stream 会是普通 async 函数返回 None，触发 TypeError）。
+        # 空 async generator：reply 阶段直接走 final_text 清理路径，不产生任何 chunk。
+        # 用 ``return`` + 不可达 ``yield`` 把函数标记为 async generator（PEP 525），
+        # 让上游 ``async for small_stream(...)`` 可以正常迭代；
+        # 若去掉 ``yield`` 会变成普通 async 函数返回 None，触发 TypeError: 'async for' received non-async-iterator。
+        # ``yield`` 行**永远不会被执行**（函数在 ``return`` 处就结束了），
+        # 仅作类型标记存在；``# pragma: no cover`` 让覆盖率工具忽略这条永远不可达的代码。
+        # 新契约下 yield 形状是 3-tuple ``(content, reasoning, error)``；
+        # 本测试只需「不产出任何 chunk」，元组形状无关紧要（async for 不会触发解包）。
         return
-        yield  # pragma: no cover  # unreachable; 仅为类型标记
+        yield  # pragma: no cover  # 永远不可达；仅作 async generator 类型标记（PEP 525）
 
 
 async def _fake_build_chat_context(
@@ -420,3 +425,103 @@ async def test_tool_dispatch_end_yields_even_when_tool_raises(monkeypatch):
     names = _stage_names(events)
     assert (StageName.MODEL_REASONING, StageState.START) in names
     assert (StageName.ANSWER, StageState.END) in names
+
+
+# ---------- §3.5 错误事件保证 ----------
+
+class _BoomCompletions:
+    """让 ``completions.create(stream=True)`` 抛错，模拟 LLM 流式异常。
+
+    非流式调用（ReAct 决策）返回 ``"OK"``，让 ReAct 循环直接退出，不引入工具调用干扰。
+    """
+
+    async def create(self, *args, **kwargs):
+        if kwargs.get("stream"):
+            raise RuntimeError("LLM stream backend down")
+        return {
+            "choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}],
+            "usage": {},
+        }
+
+
+class _BoomChat:
+    completions = _BoomCompletions()
+
+
+class _BoomSmallClient:
+    chat = _BoomChat()
+
+
+def _make_erroring_llm_client():
+    """构造一个真实 LLMClient，但 monkey-patch 其 ``_small_client`` 让 stream 抛错。
+
+    使用真实 LLMClient（而不是 FakeLLMClient）是为了让真实 ``small_stream`` 的
+    内部 ``try/except`` 接管异常——这样测试覆盖的是「真实 small_stream 把异常
+    yield 成错误信号」这一关键路径，而不是「fake 已经把异常转成 error tuple」。
+    """
+    from llm.client import LLMClient
+
+    # 跳过 __init__（避免连真实 LLM 创建 AsyncOpenAI 客户端）
+    client = LLMClient.__new__(LLMClient)
+    client._small_client = _BoomSmallClient()  # type: ignore[attr-defined]
+    client.small_model = "mock-small-model"
+    client.small_max_tokens = 1024
+    client.small_temperature = 0.7
+    return client
+
+
+async def test_llm_error_yields_error_frame(monkeypatch):
+    """小模型流式异常应被 yield 出去，不静默吞掉（spec §3.5 错误事件保证）。
+
+    验证：
+    - 至少一个 ``error`` 帧，``code == "llm_stream_failed"``；
+    - ``error`` 帧之后**仍** yield ``done`` 帧（``full == ""``），让前端能正确进入完成态；
+    - ``error`` 帧在 ``done`` 帧之前（保证前端先看到错误状态再退出流式态）。
+    """
+    import biz.chat as chat_mod
+    import biz.recall_search as recall_mod
+
+    monkeypatch.setattr(chat_mod, "get_llm_client", _make_erroring_llm_client)
+    monkeypatch.setattr(chat_mod, "build_chat_context", _fake_build_chat_context)
+    monkeypatch.setattr(chat_mod, "build_segments", _fake_build_segments)
+    monkeypatch.setattr(recall_mod, "search_recall_for_chat", _fake_search_recall_for_chat)
+
+    from biz.chat import chat_stream
+
+    events: list[dict[str, Any]] = []
+    async for ev in chat_stream(
+        user_id="u1",
+        session_id="s1",
+        user_msg="hello",
+        role_id="default",
+    ):
+        events.append(ev)
+
+    error_frames = [e for e in events if e.get("type") == "error"]
+    done_frames = [e for e in events if e.get("type") == "done"]
+
+    # 关键断言：error 帧 ≥1 + done 帧 == 1（§3.5 错误事件保证）
+    assert len(error_frames) >= 1, (
+        f"expected ≥1 error frame, got 0; events={events}"
+    )
+    assert len(done_frames) == 1, (
+        f"expected exactly 1 done frame, got {len(done_frames)}; events={events}"
+    )
+
+    # error 帧字段契约
+    err = error_frames[0]
+    assert err.get("code") == "llm_stream_failed", (
+        f"error 帧 code 必须为 'llm_stream_failed': {err}"
+    )
+    assert err.get("error"), f"error 帧必须有 error 字段: {err}"
+
+    # done 帧契约：error 之后仍 yield done，且 full 为空串
+    done = done_frames[0]
+    assert done.get("full") == "", (
+        f"error 后 done.full 必须为空串: {done}"
+    )
+
+    # 顺序约束：error 必须在 done 之前（前端先看到错误状态再退出流式态）
+    assert events.index(error_frames[0]) < events.index(done_frames[0]), (
+        f"error 帧必须在 done 帧之前 yield：error@{events.index(error_frames[0])} done@{events.index(done_frames[0])}"
+    )

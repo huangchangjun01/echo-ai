@@ -507,43 +507,48 @@ async def _resolve_tools(
             StageName.TOOL_DISPATCH, StageState.START, iter=i, tool=name
         )
         t1 = time.perf_counter()
+        dispatch_failed = False
         try:
-            result = await dispatch_tool(name, **args)
-        except Exception as e:
-            tool_ms = round((time.perf_counter() - t1) * 1000, 2)
-            log_exception(
-                logger,
-                "react tool dispatch failed",
-                exc=e,
-                stage="react_loop",
-                event="tool_error",
-                iter=i,
-                tool=name,
-                args_summary=json.dumps(args, ensure_ascii=False)[:200],
-                duration_ms=tool_ms,
-            )
-            # 异常路径：仍配对 yield end，确保 start/end 平衡
+            try:
+                result = await dispatch_tool(name, **args)
+            except Exception as e:
+                # 异常路径：标记失败，end 交给 finally 统一 yield（与 recall_search 一致）
+                dispatch_failed = True
+                tool_ms = round((time.perf_counter() - t1) * 1000, 2)
+                log_exception(
+                    logger,
+                    "react tool dispatch failed",
+                    exc=e,
+                    stage="react_loop",
+                    event="tool_error",
+                    iter=i,
+                    tool=name,
+                    args_summary=json.dumps(args, ensure_ascii=False)[:200],
+                    duration_ms=tool_ms,
+                )
+            else:
+                tool_ms = round((time.perf_counter() - t1) * 1000, 2)
+                logger.info(
+                    "react tool result",
+                    extra=merge_extra(
+                        stage="react_loop",
+                        event="tool_ok",
+                        iter=i,
+                        tool=name,
+                        ok=bool(result.ok),
+                        err=(result.error or "")[:160] if not result.ok else "",
+                        duration_ms=tool_ms,
+                    ),
+                )
+        finally:
+            # try/finally：保证 end 在 CancelledError / Exception / 正常返回下都 yield。
+            # 之前只有 try/except（CancelledError 属于 BaseException 不被捕获），
+            # 客户端断连时 end 会漏 yield，前端 tool_dispatch 阶段卡「进行中」。
             yield _stage(
                 StageName.TOOL_DISPATCH, StageState.END, iter=i, tool=name
             )
+        if dispatch_failed:
             break
-        tool_ms = round((time.perf_counter() - t1) * 1000, 2)
-        logger.info(
-            "react tool result",
-            extra=merge_extra(
-                stage="react_loop",
-                event="tool_ok",
-                iter=i,
-                tool=name,
-                ok=bool(result.ok),
-                err=(result.error or "")[:160] if not result.ok else "",
-                duration_ms=tool_ms,
-            ),
-        )
-        # tool_dispatch 阶段结束（成功路径）
-        yield _stage(
-            StageName.TOOL_DISPATCH, StageState.END, iter=i, tool=name
-        )
         tool_log.append({"iter": i, "tool": name, "args": args, "result": result.to_dict()})
 
         # 把工具结果追加进 tool_turns，让 LLM 下一轮决策 + 最终生成都能看到
@@ -797,6 +802,9 @@ async def chat_stream(
         result_sink=result_sink,
     ):
         yield ev
+    # silent fallback：若 result_sink 为空（_resolve_tools 异常退出 / CancelledError 提前终止），
+    # tool_log / tool_turns 保持空 → 视为「无工具调用」的纯聊天路径，
+    # final_messages 不附加任何 tool_turns，与 LLM 决策阶段一致。
     if result_sink:
         tool_log = result_sink[0].log
         tool_turns = result_sink[0].turns
@@ -904,10 +912,16 @@ async def chat_stream(
     t_gen = time.perf_counter()
     # model_reasoning 阶段：小模型流式生成正文（含推理过程 + 实际回答）
     yield _stage(StageName.MODEL_REASONING, StageState.START)
-    async for content, reasoning in reply_client.small_stream(
+    stream_error: str | None = None
+    async for content, reasoning, err in reply_client.small_stream(
         final_messages,
         max_tokens=llm_cfg.small_max_tokens,
     ):
+        # §3.5 错误事件保证：small_stream 抛错时 yield 错误信号（"", "", str(e))，
+        # 调用方捕获后 yield error 帧 + done 帧（full=""），让前端能正确进入完成态。
+        if err is not None:
+            stream_error = err
+            break
         if reasoning:
             yield {"type": "thinking", "stage": StageName.MODEL_REASONING, "text": reasoning}
         if not content:
@@ -929,6 +943,13 @@ async def chat_stream(
         final_text += piece
         yield {"type": "delta", "text": _strip_url_schemes(piece)}
     yield _stage(StageName.MODEL_REASONING, StageState.END)
+
+    # §3.5 错误事件保证：LLM 流式异常时跳过 answer 阶段 / 资源附录 / mood / memory append，
+    # 仅 yield error 帧 + done 帧（full=""）让前端退出流式态。
+    if stream_error is not None:
+        yield {"type": "error", "error": stream_error, "code": "llm_stream_failed"}
+        yield {"type": "done", "full": ""}
+        return
     # answer 阶段：从 model_reasoning.end 到 done（可能包含资源附录 delta）
     yield _stage(StageName.ANSWER, StageState.START)
     logger.info(

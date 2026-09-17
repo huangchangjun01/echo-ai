@@ -379,12 +379,20 @@ class LLMClient:
         *,
         max_tokens: int | None = None,
         temperature: float | None = None,
-    ) -> AsyncIterator[tuple[str, str]]:
+    ) -> AsyncIterator[tuple[str, str, str | None]]:
         """小模型流式输出（日常对话正文生成：单一小模型直接流式）。
 
-        逐 chunk yield ``(正文增量, 思考增量)``；DeepSeek 风格模型会把推理过程
-        放在独立的 ``reasoning_content`` 字段，调用方将思考下发为 thinking 事件、
-        正文下发为 delta。
+        逐 chunk yield ``(正文增量, 思考增量, 错误信号)`` 3-tuple：
+
+        - 正常 chunk：``(content, reasoning, None)``；DeepSeek 风格模型把推理过程
+          放在独立的 ``reasoning_content`` 字段，调用方将思考下发为 thinking 事件、
+          正文下发为 delta。
+        - 流式异常（create 抛错 / 流中 chunk decode 失败）：``("", "", str(e))``。
+          调用方检测到 ``error is not None`` 时应 yield ``error`` 帧 + ``done`` 帧
+          （``full=""``）让前端正确进入完成态（SSE v2 §3.5 错误事件保证）。
+
+        不再静默吞异常——以前的实现 ``except -> return`` 会让前端永远收不到 done，
+        流式状态卡死。
         """
         eff_temp = temperature if temperature is not None else self.small_temperature
         eff_max = max_tokens if max_tokens is not None else self.small_max_tokens
@@ -414,17 +422,22 @@ class LLMClient:
                             first_delta_at = time.perf_counter()
                         delta_count += 1
                         out_chars += len(content)
-                    yield content, reasoning
+                    yield content, reasoning, None
                 except Exception as e:
+                    # chunk decode 失败：仍按 §3.5 把错误信号 yield 出去，
+                    # 让上层 chat_stream 决定如何收尾（区别于 create 抛错——chunk decode
+                    # 是流中局部错误，理论上可以继续 stream，但 chat_stream 设计上把
+                    # 任何错误信号都视为「终止信号」以保证契约一致）。
                     log_silent_failure(
                         logger,
-                        "small_stream chunk decode failed (skip)",
+                        "small_stream chunk decode failed (signal error)",
                         exc=e,
                         stage="small_stream",
                         event="chunk_decode_error",
                         model=self.small_model,
                     )
-                    continue
+                    yield "", "", f"chunk_decode_error: {e}"
+                    return
         except Exception as e:
             log_exception(
                 logger,
@@ -440,6 +453,9 @@ class LLMClient:
                 delta_count=delta_count,
                 duration_ms=round((time.perf_counter() - t0) * 1000, 2),
             )
+            # 关键变更：不再 ``return`` 静默退出，而是 yield 一个错误信号
+            # 让调用方（chat_stream）能感知到失败并正确收尾（yield error + done 帧）。
+            yield "", "", str(e)
             return
         finally:
             try:
