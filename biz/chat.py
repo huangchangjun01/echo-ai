@@ -10,6 +10,7 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 from config.config import get_settings
@@ -51,6 +52,127 @@ class StageState:
 
     START = "start"
     END = "end"
+
+
+# ---------- 过程性 mood 下发（spec §4.3） ----------
+# 小模型流式生成期间,每 N 个 delta chunk 采一次情绪;|delta| 超过阈值才下发。
+# N 与阈值都是可调参数,先按 spec 推荐的 (20, 0.05) 落地,运行期再根据观察调参。
+MOOD_SAMPLE_INTERVAL = 20  # 每 20 个 chunk 采一次
+MOOD_DELTA_THRESHOLD = 0.05  # |new - last| > 阈值才 yield mood_update
+
+
+@dataclass
+class _MoodSampleInputs:
+    """过程性 mood 采样的「缓存输入」。
+
+    chat_stream 入口一次性拉取（detect_emotion_fallback / traits / relationship
+    / role_mood 短桶+基线桶），后续小模型流式期间每次重算 instant 桶时复用这些
+    值，避免对 traits 库 / echo-core HTTP / role_mood DB 的高频访问。
+    """
+
+    valence: float
+    intensity: float
+    personality_bias: float
+    relationship_influence: float
+    baseline_val: float
+    short_val: float
+
+
+async def _load_mood_sample_inputs(
+    user_id: str, role_id: str, user_msg: str
+) -> _MoodSampleInputs:
+    """一次性加载过程性 mood 采样所需的所有输入。
+
+    失败路径全部走 try/except + 兜底默认值（0.0），保证 sampling 不会因为外部依赖
+    （traits 库、echo-core HTTP、role_mood DB）故障而崩掉整条 chat_stream。
+    """
+    from character.mood import detect_emotion_fallback, personality_bias_from_traits
+    from database import fetch_one
+
+    valence, intensity = detect_emotion_fallback(user_msg)
+
+    personality_bias = 0.0
+    relationship_influence = 0.0
+
+    # OCEAN traits → personality_bias
+    try:
+        from character.traits import load_traits
+
+        traits_dict = await load_traits(user_id, role_id)
+        if traits_dict:
+            personality_bias = personality_bias_from_traits(
+                traits_dict["openness"],
+                traits_dict["agreeableness"],
+                traits_dict["neuroticism"],
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+    # relationship intimacy → relationship_influence（intimacy * 0.05）
+    try:
+        import httpx
+
+        with httpx.Client(timeout=2.0) as _c:
+            _resp = _c.get(
+                f"{os.getenv('ECHO_CORE_BASE_URL', 'http://localhost:8080')}/api/role-core/relationship",
+                params={"roleId": role_id},
+                headers={"X-Session-Id": "", "X-User-Id": user_id},
+            )
+            if _resp.status_code == 200:
+                _data = _resp.json().get("data") or {}
+                relationship_influence = (_data.get("intimacy") or 0) * 0.05
+    except Exception:  # noqa: BLE001
+        pass
+
+    # role_mood 表 → baseline_val / short_val（参与公式但过程性下发不滚动它们）
+    baseline_val = 0.0
+    short_val = 0.0
+    try:
+        _row = await fetch_one(
+            "SELECT baseline_val, short_val "
+            "FROM role_mood WHERE user_id=%s AND role_id=%s",
+            (int(user_id), int(role_id)) if str(user_id).isdigit() else (user_id, role_id),
+        )
+        if _row:
+            baseline_val = float(_row.get("baseline_val") or 0)
+            short_val = float(_row.get("short_val") or 0)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return _MoodSampleInputs(
+        valence=valence,
+        intensity=intensity,
+        personality_bias=personality_bias,
+        relationship_influence=relationship_influence,
+        baseline_val=baseline_val,
+        short_val=short_val,
+    )
+
+
+def _mood_update_dict(new_snap: MoodSnapshot, expression: str, valence: float) -> dict[str, Any]:
+    """构造 mood_update 事件的 payload（spec §3.2 7 字段契约）。"""
+    return {
+        "type": "mood_update",
+        "instantVal": new_snap.instant_val,
+        "instantIntensity": new_snap.instant_intensity,
+        "instantEmotion": new_snap.instant_emotion,
+        "shortVal": new_snap.short_val,
+        "baselineVal": new_snap.baseline_val,
+        "expression": expression,
+        "valence": valence,
+    }
+
+
+def _emotion_change_dict(
+    *, from_emotion: str, to_emotion: str, intensity: float
+) -> dict[str, Any]:
+    """构造 emotion_change 事件的 payload（spec §3.2：from/to/intensity）。"""
+    return {
+        "type": "emotion_change",
+        "from": from_emotion,
+        "to": to_emotion,
+        "intensity": intensity,
+    }
 
 
 def _stage(name: str, state: str, **extra: Any) -> dict[str, Any]:
@@ -907,12 +1029,24 @@ async def chat_stream(
     # LLM 常在裸 URL 前自作主张加 https://，逐段清掉 scheme 前缀后再下发。
     llm_cfg = get_settings().llm
     reply_client = get_llm_client()
+
+    # 过程性 mood 下发：进入流式前一次性加载采样所需的全部输入
+    # (valence / intensity / personality_bias / relationship_influence / 短长桶基线)。
+    # 失败时所有外部依赖均返回默认值,保证 streaming 主路径不被 mood 采样阻塞。
+    mood_inputs = await _load_mood_sample_inputs(user_id, role_id, user_msg)
+
     raw = ""
     emitted = 0
     t_gen = time.perf_counter()
     # model_reasoning 阶段：小模型流式生成正文（含推理过程 + 实际回答）
     yield _stage(StageName.MODEL_REASONING, StageState.START)
     stream_error: str | None = None
+    # 过程性 mood 滚动状态（spec §4.3）：每 MOOD_SAMPLE_INTERVAL 个 chunk 采样一次
+    from character.mood import MoodSnapshot, compute_mood_snapshot as _compute_mood_snapshot
+
+    last_mood_snap = MoodSnapshot()
+    last_emotion = "neutral"
+    delta_count = 0
     async for content, reasoning, err in reply_client.small_stream(
         final_messages,
         max_tokens=llm_cfg.small_max_tokens,
@@ -922,6 +1056,7 @@ async def chat_stream(
         if err is not None:
             stream_error = err
             break
+        delta_count += 1
         if reasoning:
             yield {"type": "thinking", "stage": StageName.MODEL_REASONING, "text": reasoning}
         if not content:
@@ -936,6 +1071,28 @@ async def chat_stream(
         emitted = len(cleaned)
         final_text += piece
         yield {"type": "delta", "text": _strip_url_schemes(piece)}
+
+        # 过程性 mood 采样：每 MOOD_SAMPLE_INTERVAL 个 chunk 一次, |delta| 超过阈值才下发。
+        # 同一 chat 调用内 mood_inputs 不变,所以只有「首次采样」和「post-done 末次采样」
+        # 会真正触发;后续 sample 因 new == last 不下发（避免噪声刷屏）。
+        if delta_count % MOOD_SAMPLE_INTERVAL == 0:
+            new_snap, expression = _compute_mood_snapshot(
+                last_mood_snap,
+                valence=mood_inputs.valence,
+                intensity=mood_inputs.intensity,
+                personality_bias=mood_inputs.personality_bias,
+                relationship_influence=mood_inputs.relationship_influence,
+            )
+            if abs(new_snap.instant_val - last_mood_snap.instant_val) > MOOD_DELTA_THRESHOLD:
+                yield _mood_update_dict(new_snap, expression, mood_inputs.valence)
+                if new_snap.instant_emotion != last_emotion:
+                    yield _emotion_change_dict(
+                        from_emotion=last_emotion,
+                        to_emotion=new_snap.instant_emotion,
+                        intensity=new_snap.instant_intensity,
+                    )
+                    last_emotion = new_snap.instant_emotion
+                last_mood_snap = new_snap
     # 流结束时清理尚未闭合的 <think> 残余
     cleaned = _strip_think(raw)
     if len(cleaned) > emitted:
@@ -985,117 +1142,46 @@ async def chat_stream(
     yield {"type": "done", "full": final_text}
 
     # ===== M2 三桶心情实时更新(在 done 前下发,不影响 done 流)=====
-    # 策略:基于本轮 user_msg 做轻量情感检测 + OCEAN personality_bias
-    # 计算新 mood,下发 mood_update 事件给前端;持久化到 echo-core 异步触发
+    # 策略:沿用 chat_stream 入口一次性加载的 mood_inputs(已含 valence/intensity/
+    # personality_bias/relationship_influence/baseline/short),基于过程中滚动过的
+    # last_mood_snap 再采一次末次 mood;若与 last 不同则 yield mood_update + emotion_change。
+    # 持久化到 echo-core 仍异步触发,不阻塞 SSE 流。
+    #
+    # spec §4.3 阈值已从 0.15 降至 MOOD_DELTA_THRESHOLD(0.05),更敏感。
     try:
-        from character.mood import (
-            MoodSnapshot, MoodEvent,
-            compute_instant, classify_emotion,
-            valence_to_expression, detect_emotion_fallback,
-            personality_bias_from_traits, mood_to_tone_instruction,
-        )
         from remote.role_core_client import get_role_core_client
 
-        # 1. 关键词情绪检测(快速回退路径)
-        valence, intensity = detect_emotion_fallback(user_msg)
-
-        # 2. 拉 OCEAN 计算 personality_bias
-        personality_bias = 0.0
-        relationship_influence = 0.0
-        try:
-            from character.traits import load_traits
-            traits_dict = await load_traits(user_id, role_id)
-            if traits_dict:
-                personality_bias = personality_bias_from_traits(
-                    traits_dict["openness"],
-                    traits_dict["agreeableness"],
-                    traits_dict["neuroticism"],
-                )
-        except Exception:
-            pass
-
-        # 3. 拉 relationship intimacy
-        try:
-            import httpx
-            with httpx.Client(timeout=2.0) as _c:
-                _resp = _c.get(
-                    f"{os.getenv('ECHO_CORE_BASE_URL', 'http://localhost:8080')}/api/role-core/relationship",
-                    params={"roleId": role_id},
-                    headers={"X-Session-Id": "", "X-User-Id": user_id},
-                )
-                if _resp.status_code == 200:
-                    _data = _resp.json().get("data") or {}
-                    relationship_influence = (_data.get("intimacy") or 0) * 0.05
-        except Exception:
-            pass
-
-        # 4. 拉现有 mood 快照(用于公式输入)
-        old_snap = MoodSnapshot()
-        try:
-            from database import fetch_one
-            _row = await fetch_one(
-                "SELECT instant_val, instant_intensity, instant_emotion, "
-                "short_val, short_intensity, short_emotion, "
-                "baseline_val, baseline_intensity, baseline_emotion "
-                "FROM role_mood WHERE user_id=%s AND role_id=%s",
-                (int(user_id), int(role_id)) if user_id.isdigit() else (user_id, role_id),
-            )
-            if _row:
-                old_snap = MoodSnapshot(
-                    instant_val=float(_row.get("instant_val") or 0),
-                    instant_intensity=float(_row.get("instant_intensity") or 0),
-                    instant_emotion=str(_row.get("instant_emotion") or "neutral"),
-                    short_val=float(_row.get("short_val") or 0),
-                    short_intensity=float(_row.get("short_intensity") or 0),
-                    short_emotion=str(_row.get("short_emotion") or "neutral"),
-                    baseline_val=float(_row.get("baseline_val") or 0),
-                    baseline_intensity=float(_row.get("baseline_intensity") or 0),
-                    baseline_emotion=str(_row.get("baseline_emotion") or "neutral"),
-                )
-        except Exception:
-            pass
-
-        # 5. 计算 new_instant(无 RNG 噪声)
-        event = MoodEvent(
-            impact=valence,
-            intensity=max(intensity, 0.3),
-            emotion=classify_emotion(valence),
-            personality_bias=personality_bias,
-            relationship_influence=relationship_influence,
-            noise_sigma=0.0,  # 简化：暂不引入随机噪声,保证可重现
+        # 1. 末次采样:基于 last_mood_snap(可能已被过程中采样滚动更新过)再算一次。
+        new_snap, expression = _compute_mood_snapshot(
+            last_mood_snap,
+            valence=mood_inputs.valence,
+            intensity=mood_inputs.intensity,
+            personality_bias=mood_inputs.personality_bias,
+            relationship_influence=mood_inputs.relationship_influence,
         )
-        new_instant = compute_instant(
-            old_snap.baseline_val,
-            old_snap.short_val,
-            event,
-        )
-        new_emotion = classify_emotion(new_instant)
-        new_intensity = max(intensity, old_snap.instant_intensity)
-        expression = valence_to_expression(new_instant, new_intensity)
 
-        # 6. 仅当 |delta| > 0.15 才下发(避免噪声)
-        if abs(new_instant - old_snap.instant_val) > 0.15:
-            yield {
-                "type": "mood_update",
-                "instantVal": new_instant,
-                "instantIntensity": new_intensity,
-                "instantEmotion": new_emotion,
-                "shortVal": old_snap.short_val,
-                "baselineVal": old_snap.baseline_val,
-                "expression": expression,
-                "valence": valence,
-            }
+        # 2. 仅当 |delta| > 阈值才下发(spec §4.3: 0.15 → 0.05)
+        if abs(new_snap.instant_val - last_mood_snap.instant_val) > MOOD_DELTA_THRESHOLD:
+            yield _mood_update_dict(new_snap, expression, mood_inputs.valence)
+            if new_snap.instant_emotion != last_emotion:
+                yield _emotion_change_dict(
+                    from_emotion=last_emotion,
+                    to_emotion=new_snap.instant_emotion,
+                    intensity=new_snap.instant_intensity,
+                )
+                last_emotion = new_snap.instant_emotion
+            last_mood_snap = new_snap
 
-        # 7. 异步持久化到 echo-core(不阻塞 SSE 流)
+        # 3. 异步持久化到 echo-core(不阻塞 SSE 流)
         async def _persist_mood() -> None:
             try:
                 client = get_role_core_client()
                 await client.report_mood_event(
                     user_id=user_id,
                     role_id=role_id,
-                    event_impact=valence,
-                    event_intensity=max(intensity, 0.3),
-                    emotion=new_emotion,
+                    event_impact=mood_inputs.valence,
+                    event_intensity=max(mood_inputs.intensity, 0.3),
+                    emotion=new_snap.instant_emotion,
                     trigger_event="dialogue",
                 )
             except Exception as e:

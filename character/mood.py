@@ -196,6 +196,71 @@ def classify_emotion(valence: float) -> EmotionLabel:
     return "sad"
 
 
+def compute_mood_snapshot(
+    previous: MoodSnapshot,
+    *,
+    valence: float,
+    intensity: float,
+    personality_bias: float = 0.0,
+    relationship_influence: float = 0.0,
+) -> tuple[MoodSnapshot, str]:
+    """从 previous 快照 + 新事件输入,计算 new instant 桶快照 + 表情。
+
+    设计目的(spec §4.3):支持「过程性 mood 下发」——
+    chat_stream 流式期间,基于已缓存的输入 (valence/intensity/personality/
+    relationship) 重算 new_instant,产出完整 MoodSnapshot 与 expression 标签,
+    供 ``mood_update`` 事件使用。short / baseline 桶沿用 previous,不参与滚动计算
+    (由持久化层在 done 后统一推进)。
+
+    Args:
+        previous: 上一时刻的 MoodSnapshot(initial call 时传 ``MoodSnapshot()``)。
+        valence: ``detect_emotion_fallback`` 得到的情感分值 [-1, 1]。
+        intensity: 情感强度 [0, 1];内部 ``max(intensity, 0.3)`` 兜底。
+        personality_bias: OCEAN 三维偏置(神经质负向、开放/宜人性正向)。
+        relationship_influence: 关系亲密度影响 (``intimacy * 0.05``)。
+
+    Returns:
+        ``(new_snap, expression)``:
+        - ``new_snap``: instant 桶已重算; short / baseline 沿用 previous;
+        - ``expression``: ``valence_to_expression(new_instant, new_intensity)``
+          映射出的 8 表情标签(smile / happy / excited / ...)。
+
+    Notes:
+        - 不引入 RNG 噪声(``noise_sigma=0``),保证「同输入 → 同输出」可重现。
+        - 强度更新规则沿用既有 chat.py 行为:
+          ``new_intensity = max(intensity, previous.instant_intensity)``,
+          保证过程性更新不会让强度突然回落。
+    """
+    event = MoodEvent(
+        impact=valence,
+        intensity=max(intensity, 0.3),
+        emotion=classify_emotion(valence),
+        personality_bias=personality_bias,
+        relationship_influence=relationship_influence,
+        noise_sigma=0.0,  # 过程性下发需要可重现,不留随机噪声
+    )
+    new_instant = compute_instant(
+        previous.baseline_val,
+        previous.short_val,
+        event,
+    )
+    new_emotion = classify_emotion(new_instant)
+    new_intensity = max(intensity, previous.instant_intensity)
+    expression = valence_to_expression(new_instant, new_intensity)
+    new_snap = MoodSnapshot(
+        instant_val=new_instant,
+        instant_intensity=new_intensity,
+        instant_emotion=new_emotion,
+        short_val=previous.short_val,
+        short_intensity=previous.short_intensity,
+        short_emotion=previous.short_emotion,
+        baseline_val=previous.baseline_val,
+        baseline_intensity=previous.baseline_intensity,
+        baseline_emotion=previous.baseline_emotion,
+    )
+    return new_snap, expression
+
+
 def mood_to_tone_instruction(snap: MoodSnapshot) -> str:
     """根据当前 mood 生成语气指令（注入到 system prompt 末尾）。"""
     v = snap.instant_val
