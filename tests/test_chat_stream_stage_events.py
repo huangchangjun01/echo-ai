@@ -525,3 +525,60 @@ async def test_llm_error_yields_error_frame(monkeypatch):
     assert events.index(error_frames[0]) < events.index(done_frames[0]), (
         f"error 帧必须在 done 帧之前 yield：error@{events.index(error_frames[0])} done@{events.index(done_frames[0])}"
     )
+
+
+async def test_context_frame_carries_extended_fields(monkeypatch):
+    """context 帧方案 A 扩展：persona 全文 / l0_items / l1_items 必须随帧下发。
+
+    前端意图阶段胶囊 popover 依赖这三个字段展示「真实注入内容」；
+    只发计数（persona_len / l0_count / l1_count）会让胶囊显示为空。
+    """
+    _patch_common(monkeypatch)
+
+    async def _rich_ctx(
+        user_id: str,
+        query: str,
+        *,
+        enable_multimodal: bool = True,
+        role_id: str = "default",
+    ) -> dict[str, Any]:
+        return {
+            "persona": "测试人格：你叫 Echo，温暖、耐心、有同理心。",
+            "l0_memories": ["L0-1 用户喜欢 Python", "L0-2 用户从事后端开发"],
+            "recent_summaries": [
+                "[L2] 父摘要：用户是 Python 后端工程师",
+                "[L1] 昨天聊了 Go 并发",
+                "[L1] 今天聊了 Vue 前端",
+            ],
+            "l1_hits": [],
+        }
+
+    import biz.chat as chat_mod
+
+    monkeypatch.setattr(chat_mod, "build_chat_context", _rich_ctx)
+
+    from biz.chat import chat_stream
+
+    events: list[dict[str, Any]] = []
+    async for ev in chat_stream(
+        user_id="1",
+        session_id="s1",
+        user_msg="hello",
+        role_id="default",
+    ):
+        events.append(ev)
+
+    ctx_frames = [e for e in events if e.get("type") == "context"]
+    assert len(ctx_frames) == 1, f"expected exactly 1 context frame, got {ctx_frames}"
+    frame = ctx_frames[0]
+
+    # 计数与内容本体必须同时下发
+    assert frame["persona"] == "测试人格：你叫 Echo，温暖、耐心、有同理心。"
+    assert frame["persona_len"] == len("测试人格：你叫 Echo，温暖、耐心、有同理心。")
+    assert frame["l0_items"] == ["L0-1 用户喜欢 Python", "L0-2 用户从事后端开发"]
+    assert frame["l0_count"] == 2
+    assert frame["l1_items"] == ["[L1] 昨天聊了 Go 并发", "[L1] 今天聊了 Vue 前端"]
+    assert frame["l1_count"] == 2
+    assert frame["l2_items"] == ["[L2] 父摘要：用户是 Python 后端工程师"]
+    assert frame["l2_count"] == 1
+

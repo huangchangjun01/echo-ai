@@ -200,8 +200,8 @@ class WhisperSettings(BaseSettings):
 class MemorySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MEMORY_", **_BASE_CONFIG)
 
-    l0_limit: int = 20
-    l1_topk: int = 8
+    l0_limit: int = 50
+    l1_topk: int = 100
     l2_topk: int = 20
     dedup_threshold: float = 0.92
     # ReAct 工具决策循环最大轮数。复杂多步召回（search_memory → read_memory_full → 再搜 → 回复）

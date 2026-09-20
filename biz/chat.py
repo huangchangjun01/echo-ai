@@ -61,6 +61,12 @@ class StageState:
 MOOD_SAMPLE_INTERVAL = 20  # 每 20 个 chunk 采一次
 MOOD_DELTA_THRESHOLD = 0.05  # |new - last| > 阈值才 yield mood_update
 
+# ---------- context 帧方案 A 扩展（前端意图胶囊 popover 展示） ----------
+# context 事件携带「真实注入内容」的下发上限（persona 全文 / L0 ≤ 50 / L1 ≤ 100），
+# 与前端 src/types/chat.ts::ChatContextInfo 的注释约定保持一致；超出部分仅以计数呈现。
+MAX_CONTEXT_L0_ITEMS = 50
+MAX_CONTEXT_L1_ITEMS = 100
+
 
 @dataclass
 class _MoodSampleInputs:
@@ -817,14 +823,29 @@ async def chat_stream(
             l0_preview=" | ".join(l0_list[:2])[:200],
             intent=intent.value,
         )
+    # context 帧方案 A 扩展：除计数外携带「真实注入内容」本体（persona 全文 /
+    # L0 ≤ MAX_CONTEXT_L0_ITEMS / L1 ≤ MAX_CONTEXT_L1_ITEMS），供前端意图阶段
+    # 胶囊 popover 展示；超出上限的部分仅以计数呈现，避免 SSE 帧过大。
+    # recent_summaries 是 [L2]/[L1] 前缀混合（L2 父摘要 + L1 子条目），按前缀拆成
+    # l1_items / l2_items 两个独立数组，前端分别展示「L1 近期摘要」「L2 会话摘要」。
+    _ctx_persona = ctx.get("persona") or ""
+    _ctx_l0_items = (ctx.get("l0_memories") or [])[:MAX_CONTEXT_L0_ITEMS]
+    _ctx_recent = (ctx.get("recent_summaries") or [])[:MAX_CONTEXT_L1_ITEMS]
+    _ctx_l2_items = [s for s in _ctx_recent if s.startswith("[L2]")]
+    _ctx_l1_items = [s for s in _ctx_recent if not s.startswith("[L2]")]
     yield {
         "type": "context",
         "intent": intent.value,
         "intent_source": intent_res.source,
         "intent_ms": intent_res.duration_ms,
-        "persona_len": len(ctx["persona"] or ""),
+        "persona_len": len(_ctx_persona),
         "l0_count": len(ctx["l0_memories"]),
-        "l1_count": len(ctx["recent_summaries"]),
+        "l1_count": len(_ctx_l1_items),
+        "l2_count": len(_ctx_l2_items),
+        "persona": _ctx_persona,
+        "l0_items": _ctx_l0_items,
+        "l1_items": _ctx_l1_items,
+        "l2_items": _ctx_l2_items,
     }
     # 跟踪本次请求里所有可作为附件的资源，最后拼到 final_text 末尾
     emitted_resources: list[dict] = []
