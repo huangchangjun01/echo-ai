@@ -369,7 +369,14 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
 
             return StreamingResponse(_gen(), media_type="text/event-stream")
 
-        result = await chat_collect(user_id, session_id, req.message, role_id)
+        result = await chat_collect(
+            user_id,
+            session_id,
+            user_text,
+            role_id,
+            history_msgs=req_msgs[:-1] if not use_server_history else None,
+            load_db_history=use_server_history,
+        )
         elapsed = (time.perf_counter() - t0) * 1000.0
         logger.info(
             "/chat done",

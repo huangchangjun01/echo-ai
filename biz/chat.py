@@ -73,6 +73,51 @@ _PERSIST_MOOD_SEM = asyncio.Semaphore(3)
 MAX_CONTEXT_L0_ITEMS = 50
 MAX_CONTEXT_L1_ITEMS = 100
 
+# ---------- 旧拼接协议历史清洗 ----------
+# 旧前端曾把整段对话按 "user: xxx\n\nassistant: yyy" 拼成单条 message 落库；
+# 原样注入会打穿角色边界（模型把文本里的 "assistant:" 段当成自己的历史输出 →
+# 身份颠倒 / 瞎编记忆）。加载历史时在查询侧拆回多条，不改动存量数据。
+_MAX_HISTORY_MSG_CHARS = 1200  # 单条历史截断上限，避免拼接巨串挤爆上下文
+_LEGACY_SEG_RE = re.compile(r"(?:^|\n\n)(user|assistant):\s*")
+
+
+def _clean_history_messages(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """清洗历史消息：拆分旧拼接格式、截断超长单条、仅保留 user/assistant 角色。"""
+    out: list[dict[str, str]] = []
+    polluted = 0
+    for r in rows:
+        role = r.get("role")
+        text = (r.get("content") or "").strip()
+        if role not in ("user", "assistant") or not text:
+            continue
+        matches = list(_LEGACY_SEG_RE.finditer(text))
+        if matches:
+            polluted += 1
+            # 段标之前的残余文本归入本条原始角色
+            head = text[: matches[0].start()].strip()
+            if head:
+                out.append({"role": role, "content": head[:_MAX_HISTORY_MSG_CHARS]})
+            for i, m in enumerate(matches):
+                seg_start = m.end()
+                seg_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+                body = text[seg_start:seg_end].strip()
+                if body:
+                    out.append({"role": m.group(1), "content": body[:_MAX_HISTORY_MSG_CHARS]})
+            continue
+        out.append({"role": role, "content": text[:_MAX_HISTORY_MSG_CHARS]})
+    if polluted:
+        logger.info(
+            "legacy concat history split",
+            extra=merge_extra(
+                stage="chat_stream",
+                event="legacy_history_split",
+                polluted_rows=polluted,
+                cleaned_len=len(out),
+            ),
+        )
+    return out
+
+
 
 @dataclass
 class _MoodSampleInputs:
@@ -888,20 +933,16 @@ async def chat_stream(
     # 服务端多轮历史（业界 messages[] 协议配套）：前端只发当前输入时，
     # 从 chat_messages 按 session 加载最近 N 条作为多轮上下文；
     # 否则沿用请求自带的 history_msgs（客户端回放模式）。长程记忆仍由 L0/L1/L2 兜底。
-    _db_history: list[dict[str, str]] | None = None
+    _db_history: list[dict[str, Any]] | None = None
     if load_db_history:
         from biz.chat_memory import recent_messages
         try:
-            _rows = await recent_messages(session_id, limit=16)
-            _db_history = [
-                {"role": r["role"], "content": r["content"]}
-                for r in _rows
-                if r.get("role") in ("user", "assistant") and r.get("content")
-            ]
+            _db_history = await recent_messages(session_id, limit=16)
         except Exception:  # noqa: BLE001
             _db_history = None
-    _context_history = history_msgs or _db_history or []
-    _context_history = _context_history[-16:]
+    # 统一清洗（DB 历史 / 客户端回放都可能带旧拼接协议的污染消息），
+    # 拆分后再截到最近 16 条，避免污染注入打穿角色边界。
+    _context_history = _clean_history_messages(history_msgs or _db_history or [])[-16:]
 
     # 工具决策 seed：仅在非 chat 意图下注入 L1 hint + 工具偏好（chat 类无 RAG 上下文，
     # 注入反而误导 LLM）。这份 seed 只用于「该不该调工具、调哪把」的 ReAct 决策。
@@ -1310,7 +1351,14 @@ async def chat_stream(
         pass
 
 
-async def chat_collect(user_id: str, session_id: str, user_msg: str, role_id: str = "default") -> dict:
+async def chat_collect(
+    user_id: str,
+    session_id: str,
+    user_msg: str,
+    role_id: str = "default",
+    history_msgs: list[dict[str, str]] | None = None,
+    load_db_history: bool = False,
+) -> dict:
     """一次性收集 chat 结果：等流结束 → 同步等待记忆抽取落库 → 再返回。
 
     与 chat_stream 不同：chat_collect 在生成完整回复后立即 await 记忆抽取，
@@ -1319,7 +1367,14 @@ async def chat_collect(user_id: str, session_id: str, user_msg: str, role_id: st
     events: list[dict[str, Any]] = []
     full = ""
     started = time.time()
-    async for ev in chat_stream(user_id, session_id, user_msg, role_id):
+    async for ev in chat_stream(
+        user_id,
+        session_id,
+        user_msg,
+        role_id,
+        history_msgs=history_msgs,
+        load_db_history=load_db_history,
+    ):
         events.append(ev)
         if ev["type"] == "done":
             full = ev["full"]
