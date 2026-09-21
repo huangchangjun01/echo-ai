@@ -151,6 +151,12 @@ def _patch_common(
     monkeypatch.setattr(chat_mod, "build_chat_context", _fake_build_chat_context)
     monkeypatch.setattr(chat_mod, "build_segments", _fake_build_segments)
 
+    async def _fake_persona_segment(user_id: str, role_id: str = "default") -> str:
+        """空人格段：让 context 帧回落 ctx.persona，既有断言保持稳定。"""
+        return ""
+
+    monkeypatch.setattr(chat_mod, "load_persona_segment", _fake_persona_segment)
+
     async def _recall_or_raise(*args, **kwargs):
         if recall_search_side_effect is not None:
             raise recall_search_side_effect
@@ -484,6 +490,12 @@ async def test_llm_error_yields_error_frame(monkeypatch):
     monkeypatch.setattr(chat_mod, "get_llm_client", _make_erroring_llm_client)
     monkeypatch.setattr(chat_mod, "build_chat_context", _fake_build_chat_context)
     monkeypatch.setattr(chat_mod, "build_segments", _fake_build_segments)
+
+    async def _fake_persona_segment(user_id: str, role_id: str = "default") -> str:
+        """空人格段：让 context 帧回落 ctx.persona。"""
+        return ""
+
+    monkeypatch.setattr(chat_mod, "load_persona_segment", _fake_persona_segment)
     monkeypatch.setattr(recall_mod, "search_recall_for_chat", _fake_search_recall_for_chat)
 
     from biz.chat import chat_stream
@@ -525,6 +537,35 @@ async def test_llm_error_yields_error_frame(monkeypatch):
     assert events.index(error_frames[0]) < events.index(done_frames[0]), (
         f"error 帧必须在 done 帧之前 yield：error@{events.index(error_frames[0])} done@{events.index(done_frames[0])}"
     )
+
+
+async def test_context_frame_uses_effective_role_persona(monkeypatch):
+    """胶囊人格展示 = 实际注入人格：角色级 persona_segment 优先于 ctx.persona（DEFAULT）。"""
+    _patch_common(monkeypatch)
+
+    import biz.chat as chat_mod
+
+    async def _role_persona(user_id: str, role_id: str = "default") -> str:
+        return "【身份】小暖：22岁女生，喜欢小狗"
+
+    monkeypatch.setattr(chat_mod, "load_persona_segment", _role_persona)
+
+    from biz.chat import chat_stream
+
+    events: list[dict[str, Any]] = []
+    async for ev in chat_stream(
+        user_id="1",
+        session_id="s1",
+        user_msg="hello",
+        role_id="3",
+    ):
+        events.append(ev)
+
+    ctx_frames = [e for e in events if e.get("type") == "context"]
+    assert len(ctx_frames) == 1, f"expected exactly 1 context frame, got {ctx_frames}"
+    frame = ctx_frames[0]
+    assert frame["persona"] == "【身份】小暖：22岁女生，喜欢小狗"
+    assert frame["persona_len"] == len("【身份】小暖：22岁女生，喜欢小狗")
 
 
 async def test_context_frame_carries_extended_fields(monkeypatch):

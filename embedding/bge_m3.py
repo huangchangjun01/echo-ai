@@ -173,6 +173,12 @@ def warmup() -> None:
         )
 
 
+# BGE-M3 是 CPU 推理模型：多个线程并发调用 encode 会激烈抢 GIL，
+# 把单事件循环（uvicorn）饿到 /health 都要 2 秒、请求"假死"。
+# 用线程锁串行化同一模型的推理调用。
+_EMBED_LOCK = threading.Lock()
+
+
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """BGE-M3 文本向量化；失败回退 SHA256。"""
     cfg = get_settings().bge_m3
@@ -184,12 +190,13 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     t0 = time.perf_counter()
     if model is not None:
         try:
-            vecs = model.encode(
-                texts,
-                batch_size=8,
-                normalize_embeddings=True,
-                show_progress_bar=False,
-            )
+            with _EMBED_LOCK:
+                vecs = model.encode(
+                    texts,
+                    batch_size=8,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )
             out = [list(map(float, v)) for v in vecs]
             logger.info(
                 "BGE-M3 embed ok",

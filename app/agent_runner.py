@@ -45,6 +45,10 @@ from vector import vector_store as vs_module
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# 后台记忆抽取并发上限：fire-and-forget 任务无界堆积会把 DB 连接池 / 默认线程池 /
+# LLM 打满，导致后续 /chat 在首个 DB 调用处永久等待（服务"卡死"）。用信号量限流。
+_EXTRACT_SEM = asyncio.Semaphore(3)
+
 
 # ---------- Lifespan ----------
 
@@ -200,11 +204,20 @@ app.include_router(recall_router)
 # ---------- 请求模型（仅对外暴露） ----------
 
 
+class ChatMessage(BaseModel):
+    """单条对话消息（业界 messages[] 协议）。"""
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str = Field(..., min_length=1, max_length=4096)
+
+
 class ChatRequest(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=128, alias="userId")
     session_id: str | None = Field(None, alias="sessionId")
     role_id: str = Field("default", min_length=1, max_length=128, alias="roleId")
-    message: str = Field(..., min_length=1, max_length=4096)
+    # 兼容旧协议：仅 message（历史由前端拼串）。与 messages 二选一，优先 messages。
+    # 注意不加 min_length：Go 端 messages 协议下 message 会透传空串 ""，由下方手工校验兜底。
+    message: str | None = Field(None, max_length=4096)
+    messages: list[ChatMessage] | None = Field(None)
     stream: bool = False
 
     model_config = {"populate_by_name": True}
@@ -249,7 +262,19 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
     session_id = req.session_id or uuid.uuid4().hex
     role_id = req.role_id or "default"
     request_id = uuid.uuid4().hex
-    msg_len = len(req.message or "")
+    # messages[] 协议：请求携带结构化消息（前端只发当前输入，历史由后端按 session 加载）。
+    # 旧协议兼容：仅 message 时视为单条 user 消息；两者都为空则 422。
+    req_msgs: list[dict[str, str]] = [
+        {"role": m.role, "content": m.content} for m in (req.messages or [])
+    ] or ([{"role": "user", "content": req.message}] if req.message else [])
+    if not req_msgs:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="message or messages is required")
+    # 业界多轮上下文：使用 messages[] 协议时，历史从 chat_messages 加载（服务端状态）；
+    # 旧 message 拼串协议保持原行为（历史在 message 里），避免重复注入。
+    use_server_history = req.messages is not None
+    user_text = req_msgs[-1]["content"]
+    msg_len = len(user_text)
     ctx_token = bind_request(
         user_id=user_id,
         session_id=session_id,
@@ -263,7 +288,7 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
         extra=merge_extra(
             stream=bool(req.stream),
             msg_len=msg_len,
-            msg_preview=(req.message or "")[:120],
+            msg_preview=user_text[:120],
         ),
     )
     try:
@@ -272,7 +297,14 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
                 nonlocal_full = {"v": ""}
                 emitted = {"context": False, "prefix": False, "delta": False, "tool": 0}
                 t = time.perf_counter()
-                async for ev in chat_stream(user_id, session_id, req.message, role_id):
+                async for ev in chat_stream(
+                    user_id,
+                    session_id,
+                    user_text,
+                    role_id,
+                    history_msgs=req_msgs[:-1] if not use_server_history else None,
+                    load_db_history=use_server_history,
+                ):
                     et = ev.get("type")
                     if et == "done":
                         nonlocal_full["v"] = ev.get("full", "") or ""
@@ -310,13 +342,14 @@ async def chat_endpoint(req: ChatRequest) -> dict[str, Any]:
                             event="background",
                         )
                         try:
-                            await extract_and_archive_async(
-                                user_id=user_id,
-                                session_id=session_id,
-                                user_msg=req.message,
-                                assistant_msg=nonlocal_full["v"],
-                                role_id=role_id,
-                            )
+                            async with _EXTRACT_SEM:
+                                await extract_and_archive_async(
+                                    user_id=user_id,
+                                    session_id=session_id,
+                                    user_msg=user_text,
+                                    assistant_msg=nonlocal_full["v"],
+                                    role_id=role_id,
+                                )
                         except Exception as e:  # noqa: BLE001
                             log_exception(
                                 logger,

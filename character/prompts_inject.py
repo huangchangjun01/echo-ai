@@ -69,16 +69,11 @@ async def build_segments(
     segments: dict[str, str] = {k: "" for k in SEGMENT_BUDGET.keys()}
 
     # 1. persona 段:从 role_persona 表读(fallback to personas + DEFAULT_PERSONA)
+    # 与胶囊展示共用 load_persona_segment，保证「展示 = 注入」。
     try:
-        from .persona import load_persona, load_persona_legacy, render_persona_for_prompt
+        from .persona import load_persona_segment
 
-        new_persona = await load_persona(user_id, role_id)
-        if new_persona is not None:
-            segments["persona"] = render_persona_for_prompt(new_persona)
-        else:
-            # 降级:旧 personas 表 -> DEFAULT_PERSONA
-            legacy = await load_persona_legacy(user_id)
-            segments["persona"] = legacy
+        segments["persona"] = await load_persona_segment(user_id, role_id)
     except Exception as e:
         log_exception(
             logger,

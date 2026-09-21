@@ -17,6 +17,7 @@ from config.config import get_settings
 from config.prompts import build_system_prompt, TOOL_DESCRIPTIONS
 from character.mood import MoodSnapshot, compute_mood_snapshot as _compute_mood_snapshot
 from character.prompts_inject import build_segments
+from character.persona import load_persona_segment
 from llm.client import get_llm_client, parse_tool_call
 from llm.intent import Intent, classify_intent
 from llm.think import _has_open_think, _strip_think
@@ -60,6 +61,11 @@ class StageState:
 # N 与阈值都是可调参数,先按 spec 推荐的 (20, 0.05) 落地,运行期再根据观察调参。
 MOOD_SAMPLE_INTERVAL = 20  # 每 20 个 chunk 采一次
 MOOD_DELTA_THRESHOLD = 0.05  # |new - last| > 阈值才 yield mood_update
+
+# 后台落库 / 心情持久化并发上限：每轮对话都会 fire-and-forget 写 chat_messages /
+# chat_sessions / echo-core，无界堆积会争抢同一会话行锁并占满连接池。
+_RECORD_SEM = asyncio.Semaphore(3)
+_PERSIST_MOOD_SEM = asyncio.Semaphore(3)
 
 # ---------- context 帧方案 A 扩展（前端意图胶囊 popover 展示） ----------
 # context 事件携带「真实注入内容」的下发上限（persona 全文 / L0 ≤ 50 / L1 ≤ 100），
@@ -752,6 +758,8 @@ async def chat_stream(
     session_id: str,
     user_msg: str,
     role_id: str = "default",
+    history_msgs: list[dict[str, str]] | None = None,
+    load_db_history: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
     """流式 chat：预注入 → ReAct → 流式级联输出。
 
@@ -828,7 +836,10 @@ async def chat_stream(
     # 胶囊 popover 展示；超出上限的部分仅以计数呈现，避免 SSE 帧过大。
     # recent_summaries 是 [L2]/[L1] 前缀混合（L2 父摘要 + L1 子条目），按前缀拆成
     # l1_items / l2_items 两个独立数组，前端分别展示「L1 近期摘要」「L2 会话摘要」。
-    _ctx_persona = ctx.get("persona") or ""
+    # 胶囊展示的人格 = 实际注入 LLM 的人格（角色级 role_persona → 用户级 personas → 默认）。
+    # 与 build_segments 的 persona 段同源（load_persona_segment），保证「展示 = 注入」；
+    # 例如用户无用户级人格时，胶囊不再显示 DEFAULT_PERSONA，而是显示角色的真实人格。
+    _ctx_persona = (await load_persona_segment(user_id, role_id)) or (ctx.get("persona") or "")
     _ctx_l0_items = (ctx.get("l0_memories") or [])[:MAX_CONTEXT_L0_ITEMS]
     _ctx_recent = (ctx.get("recent_summaries") or [])[:MAX_CONTEXT_L1_ITEMS]
     _ctx_l2_items = [s for s in _ctx_recent if s.startswith("[L2]")]
@@ -874,6 +885,24 @@ async def chat_stream(
 
     final_text = ""
 
+    # 服务端多轮历史（业界 messages[] 协议配套）：前端只发当前输入时，
+    # 从 chat_messages 按 session 加载最近 N 条作为多轮上下文；
+    # 否则沿用请求自带的 history_msgs（客户端回放模式）。长程记忆仍由 L0/L1/L2 兜底。
+    _db_history: list[dict[str, str]] | None = None
+    if load_db_history:
+        from biz.chat_memory import recent_messages
+        try:
+            _rows = await recent_messages(session_id, limit=16)
+            _db_history = [
+                {"role": r["role"], "content": r["content"]}
+                for r in _rows
+                if r.get("role") in ("user", "assistant") and r.get("content")
+            ]
+        except Exception:  # noqa: BLE001
+            _db_history = None
+    _context_history = history_msgs or _db_history or []
+    _context_history = _context_history[-16:]
+
     # 工具决策 seed：仅在非 chat 意图下注入 L1 hint + 工具偏好（chat 类无 RAG 上下文，
     # 注入反而误导 LLM）。这份 seed 只用于「该不该调工具、调哪把」的 ReAct 决策。
     l1_hint = "\n".join(
@@ -890,6 +919,7 @@ async def chat_stream(
         tool_hint = _INTENT_TOOL_HINT.get(intent)
         if tool_hint:
             tool_seed.append({"role": "system", "content": tool_hint})
+    tool_seed.extend(_context_history)
     tool_seed.append({"role": "user", "content": user_msg})
 
     logger.info(
@@ -1070,6 +1100,7 @@ async def chat_stream(
                 }
             )
 
+    final_messages.extend(_context_history)
     final_messages.append({"role": "user", "content": user_msg})
     final_messages += tool_turns
     if tool_turns:
@@ -1226,15 +1257,16 @@ async def chat_stream(
         # 末次 instant_emotion 仍用于持久化,保证 echo-core 收到一次最终 emotion。
         async def _persist_mood() -> None:
             try:
-                client = get_role_core_client()
-                await client.report_mood_event(
-                    user_id=user_id,
-                    role_id=role_id,
-                    event_impact=mood_inputs.valence,
-                    event_intensity=max(mood_inputs.intensity, 0.3),
-                    emotion=new_snap.instant_emotion,
-                    trigger_event="dialogue",
-                )
+                async with _PERSIST_MOOD_SEM:
+                    client = get_role_core_client()
+                    await client.report_mood_event(
+                        user_id=user_id,
+                        role_id=role_id,
+                        event_impact=mood_inputs.valence,
+                        event_intensity=max(mood_inputs.intensity, 0.3),
+                        emotion=new_snap.instant_emotion,
+                        trigger_event="dialogue",
+                    )
             except Exception as e:
                 log_silent_failure(
                     logger,
@@ -1265,10 +1297,11 @@ async def chat_stream(
 
         async def _record() -> None:
             try:
-                await append_message(session_id, user_id, role_id, "user", user_msg)
-                await append_message(session_id, user_id, role_id, "assistant", final_text)
-                await upsert_session(user_id, role_id, session_id, msg_count_delta=2)
-                await bump_retain(session_id)
+                async with _RECORD_SEM:
+                    await append_message(session_id, user_id, role_id, "user", user_msg)
+                    await append_message(session_id, user_id, role_id, "assistant", final_text)
+                    await upsert_session(user_id, role_id, session_id, msg_count_delta=2)
+                    await bump_retain(session_id)
             except Exception:
                 pass
 

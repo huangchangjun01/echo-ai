@@ -104,6 +104,35 @@ async def load_persona_legacy(user_id: str) -> str:
     return DEFAULT_PERSONA
 
 
+async def load_persona_segment(user_id: str, role_id: str = "default") -> str:
+    """返回「实际注入 LLM 的人格段」：role_persona → 旧 personas 表 → DEFAULT_PERSONA。
+
+    与 build_segments 的 persona 段共用同一降级链（见 prompts_inject.py），
+    让前端胶囊展示的人格与 LLM 实际看到的人格保持一致（角色级优先）。
+    """
+    from config.prompts import DEFAULT_PERSONA
+
+    try:
+        new_persona = await load_persona(user_id, role_id)
+        if new_persona is not None:
+            return render_persona_for_prompt(new_persona)
+        # 降级：旧 personas 表（无记录时函数内部已返回 DEFAULT_PERSONA）
+        return await load_persona_legacy(user_id)
+    except Exception as e:
+        log_exception(
+            logger,
+            "load_persona_segment failed, fallback to DEFAULT_PERSONA",
+            exc=e,
+            level=logging.WARNING,
+            include_traceback=False,
+            stage="character.persona",
+            event="segment_failed",
+            user_id=user_id,
+            role_id=role_id,
+        )
+        return DEFAULT_PERSONA
+
+
 def render_persona_for_prompt(persona: dict[str, Any] | None) -> str:
     """把结构化人格渲染成 LLM 友好的提示词片段。
 

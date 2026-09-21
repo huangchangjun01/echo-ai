@@ -177,6 +177,10 @@ def _extract_image_features(out: Any, target_device: torch.device) -> torch.Tens
     raise TypeError(f"Unexpected output from get_image_features: {type(out)!r}")
 
 
+# 与 bge_m3 同理：CPU 上并发跑 CLIP 推理会抢 GIL 饿死事件循环，串行化。
+_TEXT_EMBED_LOCK = threading.Lock()
+
+
 def compute_text_embeddings(texts: Sequence[str], device: str = "auto") -> list[list[float]]:
     """Batched text embedding. Returns one L2-normalized vector per input string."""
     texts = list(texts)
@@ -185,8 +189,9 @@ def compute_text_embeddings(texts: Sequence[str], device: str = "auto") -> list[
     model, processor, target_device = _load_internal(device)
     t0 = time.perf_counter()
     try:
-        with torch.no_grad():
-            inputs = processor(text=texts, return_tensors="pt", padding=True, truncation=True)
+        with _TEXT_EMBED_LOCK:
+            with torch.no_grad():
+                inputs = processor(text=texts, return_tensors="pt", padding=True, truncation=True)
             inputs = _to_device(inputs, target_device)
             features = _extract_text_features(model.get_text_features(**inputs), target_device)
             features = _normalize(features)

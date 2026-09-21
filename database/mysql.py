@@ -53,6 +53,12 @@ import pymysql  # 同步回退
 _pool: Any | None = None
 _pool_lock = asyncio.Lock()
 
+# 连接池获取超时（秒）：池被占满时最多等这么久，超时快速失败并抛错，
+# 由各调用方 try/except 降级（如 L0/L1 返回空），避免「永久等待 → 服务看似卡死」。
+# 修复背景：轮次多了后后台抽取任务堆积，慢查询占满 10 条连接，
+# aiomysql 默认 acquire 无超时，新请求会在首个 DB 调用处永久挂起。
+_ACQUIRE_TIMEOUT_SEC = 10.0
+
 
 async def _init_async_pool() -> Any:
     """创建 aiomysql 连接池。
@@ -158,16 +164,18 @@ async def close_pool() -> None:
 
 @asynccontextmanager
 async def acquire() -> AsyncIterator[Any]:
-    """`async with acquire() as conn:` 取一条连接。"""
+    """`async with acquire() as conn:` 取一条连接。超时快速失败，不永久等待。"""
     pool = await get_pool()
     if _HAS_AIOMYSQL and hasattr(pool, "acquire"):
-        conn = await pool.acquire()
+        conn = await asyncio.wait_for(pool.acquire(), timeout=_ACQUIRE_TIMEOUT_SEC)
         try:
             yield conn
         finally:
             pool.release(conn)
     else:
-        conn = await asyncio.to_thread(pool.get_connection)
+        conn = await asyncio.wait_for(
+            asyncio.to_thread(pool.get_connection), timeout=_ACQUIRE_TIMEOUT_SEC
+        )
         try:
             yield conn
         finally:
